@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { ArrowDownRight, ArrowRight, Check, ChevronDown, CircleDot, Code2, Download, GitBranch, LockKeyhole, Menu, Mic2, MousePointer2, Monitor, Play, ShieldCheck, Sparkles, Terminal, X } from 'lucide-react'
+import Link from 'next/link'
 
 const modes = {
   coach: { label: 'COACH MODE', title: 'Learn by doing, not watching.', copy: 'MYLO sees your screen and gently guides you through the exact next move.', color: 'yellow', icon: Sparkles },
