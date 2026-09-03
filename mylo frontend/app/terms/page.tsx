@@ -42,14 +42,29 @@ export default function TermsPage() {
             MYLO includes features like "Do Mode" that allow the AI to simulate mouse movements and keyboard inputs on your behalf. <strong>You are fully responsible for the actions MYLO takes on your computer.</strong> MYLO is designed to pause for your approval before executing actions, but you assume all risks associated with automated software control. We are not liable for any data loss, unintended actions, or system changes caused by MYLO.
           </p>
 
-          <h2 className="text-2xl font-bold text-[#1e1e1e] mt-10">4. No Warranties</h2>
+          <h2 className="text-2xl font-bold text-[#1e1e1e] mt-10">4. Acceptable Use &amp; Prohibited Conduct</h2>
           <p>
-            MYLO is provided "as is" and "as available," without any warranties of any kind, whether express or implied. We do not guarantee that the software will be error-free or uninterrupted.
+            MYLO is designed to boost your productivity through legitimate workflows. <strong>You agree NOT to use MYLO to:</strong>
+          </p>
+          <ul className="list-disc list-inside space-y-2 mt-4">
+            <li>Cheat on exams, assessments, or any form of academic evaluation.</li>
+            <li>Circumvent, bypass, or interfere with proctoring software, anti-cheat systems, or any monitoring tools deployed by educational institutions, employers, or testing organizations.</li>
+            <li>Violate the terms of service, codes of conduct, or policies of any institution, employer, platform, or third-party service.</li>
+            <li>Engage in any activity that is illegal, deceptive, fraudulent, or harmful to others.</li>
+            <li>Misrepresent MYLO&apos;s output as your own original work in contexts where AI assistance is prohibited.</li>
+          </ul>
+          <p className="mt-4">
+            MYLO&apos;s overlay exclusion feature (WDA_EXCLUDEFROMCAPTURE) is a Windows-native capability provided for <strong>privacy, streaming, and productivity purposes only</strong>. You are solely responsible for ensuring your use of MYLO complies with all applicable laws, regulations, institutional policies, and contractual obligations. We reserve the right to suspend or terminate your access if we become aware of prohibited use.
           </p>
 
-          <h2 className="text-2xl font-bold text-[#1e1e1e] mt-10">5. Limitation of Liability</h2>
+          <h2 className="text-2xl font-bold text-[#1e1e1e] mt-10">5. No Warranties</h2>
           <p>
-            To the maximum extent permitted by law, MYLO and its creators shall not be liable for any indirect, incidental, special, consequential, or punitive damages resulting from your use of or inability to use the service.
+            MYLO is provided &quot;as is&quot; and &quot;as available,&quot; without any warranties of any kind, whether express or implied. We do not guarantee that the software will be error-free or uninterrupted.
+          </p>
+
+          <h2 className="text-2xl font-bold text-[#1e1e1e] mt-10">6. Limitation of Liability</h2>
+          <p>
+            To the maximum extent permitted by law, MYLO and its creators shall not be liable for any indirect, incidental, special, consequential, or punitive damages resulting from your use of or inability to use the service. This includes, without limitation, any damages arising from misuse of MYLO&apos;s overlay, stealth, or automation features.
           </p>
 
           <p className="mt-8">
