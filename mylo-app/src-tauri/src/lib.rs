@@ -24,7 +24,9 @@ pub fn run() {
             ipc::save_api_key,
             ipc::get_api_key,
             ipc::capture_active_monitor,
-            ipc::approve_do_action
+            ipc::capture_screen_crop,
+            ipc::approve_do_action,
+            ipc::set_overlay_interactive
         ])
         .setup(|app| {
             let overlay_window = app.get_webview_window("overlay").unwrap();

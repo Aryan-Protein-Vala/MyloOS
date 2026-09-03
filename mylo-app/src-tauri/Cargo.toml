@@ -23,6 +23,8 @@ serde = { version = "1.0", features = ["derive"] }
 log = "0.4"
 tauri = { version = "2.11.3" }
 tauri-plugin-log = "2"
-windows = { version = "0.58", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging"] }
+windows = { version = "0.58", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_Graphics_Gdi"] }
 tauri-plugin-store = "2.4.4"
 tauri-plugin-global-shortcut = "2.3.2"
+image = "0.25.1"
+base64 = "0.22.1"

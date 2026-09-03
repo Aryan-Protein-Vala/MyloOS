@@ -1,22 +1,40 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { Mic2, MousePointer2, AlertCircle } from 'lucide-react'
 import { RoughArrow, RoughCircle } from '@/components/ui/design-system'
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
+import { askAi } from '@/lib/ai-client'
 
 type OverlayState = 'hidden' | 'coach' | 'do' | 'ask'
 
 export default function OverlayPage() {
-  const [overlayState, setOverlayState] = useState<OverlayState>('ask') // Default for dev testing
-  const [targetPos, setTargetPos] = useState({ x: 300, y: 200 }) // Example static position
+  const [overlayState, setOverlayState] = useState<OverlayState>('ask')
+  const [targetPos, setTargetPos] = useState({ x: 300, y: 200 })
+  
+  // Selection state
+  const [isDragging, setIsDragging] = useState(false)
+  const [startPos, setStartPos] = useState({ x: 0, y: 0 })
+  const [currentPos, setCurrentPos] = useState({ x: 0, y: 0 })
+  const [selection, setSelection] = useState<{x: number, y: number, w: number, h: number} | null>(null)
+  const [isProcessing, setIsProcessing] = useState(false)
+  const [aiResponse, setAiResponse] = useState<string | null>(null)
 
   useEffect(() => {
-    // Listen for state changes from the Rust backend (e.g. triggered by global shortcut)
     const setupListener = async () => {
       const unlisten = await listen<OverlayState>('overlay-state-changed', (event) => {
         setOverlayState(event.payload)
+        // Reset state when hiding or opening
+        if (event.payload === 'ask') {
+          setSelection(null)
+          setAiResponse(null)
+          setIsProcessing(false)
+          // Make it interactive so we can draw
+          invoke('set_overlay_interactive', { interactive: true })
+        } else {
+          invoke('set_overlay_interactive', { interactive: false })
+        }
       })
       return unlisten
     }
@@ -29,10 +47,71 @@ export default function OverlayPage() {
     }
   }, [])
 
+  const handlePointerDown = (e: React.PointerEvent) => {
+    if (overlayState !== 'ask' || selection || isProcessing) return
+    setIsDragging(true)
+    setStartPos({ x: e.clientX, y: e.clientY })
+    setCurrentPos({ x: e.clientX, y: e.clientY })
+  }
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (!isDragging) return
+    setCurrentPos({ x: e.clientX, y: e.clientY })
+  }
+
+  const handlePointerUp = async (e: React.PointerEvent) => {
+    if (!isDragging) return
+    setIsDragging(false)
+    
+    const x = Math.min(startPos.x, currentPos.x)
+    const y = Math.min(startPos.y, currentPos.y)
+    const w = Math.abs(currentPos.x - startPos.x)
+    const h = Math.abs(currentPos.y - startPos.y)
+
+    // Ignore tiny clicks
+    if (w < 10 || h < 10) return
+
+    setSelection({ x, y, w, h })
+    
+    // Stop being interactive to pass clicks to underlying apps again
+    await invoke('set_overlay_interactive', { interactive: false })
+    
+    // Process capture
+    setIsProcessing(true)
+    try {
+      const base64Img: string | null = await invoke('capture_screen_crop', { 
+        x: Math.round(x), 
+        y: Math.round(y), 
+        width: Math.round(w), 
+        height: Math.round(h) 
+      })
+
+      if (base64Img) {
+        const response = await askAi("What is happening in this circled area? Keep it extremely brief.", base64Img)
+        setAiResponse(response)
+      } else {
+        setAiResponse("Failed to capture screen.")
+      }
+    } catch (err) {
+      console.error(err)
+      setAiResponse("Error capturing screen or contacting AI.")
+    } finally {
+      setIsProcessing(false)
+    }
+  }
+
   if (overlayState === 'hidden') return null
 
   return (
-    <div className="fixed inset-0 w-screen h-screen pointer-events-none z-[9999] overflow-hidden bg-transparent">
+    <div 
+      className={`fixed inset-0 w-screen h-screen z-[9999] overflow-hidden bg-transparent ${
+        overlayState === 'ask' && !selection && !isProcessing ? 'pointer-events-auto cursor-crosshair' : 'pointer-events-none'
+      }`}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerUp}
+    >
       
       {overlayState === 'coach' && (
         <>
@@ -69,17 +148,69 @@ export default function OverlayPage() {
         </div>
       )}
 
-      {overlayState === 'ask' && (
+      {/* Drawing the selection box */}
+      {isDragging && (
+        <div 
+          className="absolute pointer-events-none"
+          style={{
+            left: Math.min(startPos.x, currentPos.x),
+            top: Math.min(startPos.y, currentPos.y),
+            width: Math.abs(currentPos.x - startPos.x),
+            height: Math.abs(currentPos.y - startPos.y)
+          }}
+        >
+          <div className="absolute inset-0 bg-[var(--blue)] opacity-10 rounded-full" />
+          <RoughCircle className="text-[var(--blue)] drop-shadow-md" />
+        </div>
+      )}
+
+      {/* Selected Box + AI Response */}
+      {selection && (
+        <div 
+          className="absolute pointer-events-none"
+          style={{
+            left: selection.x,
+            top: selection.y,
+            width: selection.w,
+            height: selection.h
+          }}
+        >
+          <RoughCircle className="text-[var(--red)] drop-shadow-md" />
+          {/* Sticky Note attached to the selection */}
+          <div className="absolute top-0 right-[-320px] ml-4 w-72 pointer-events-auto">
+            <div className="speech">
+              <b>MYLO says:</b><br />
+              {isProcessing ? (
+                <div className="flex items-center gap-2 mt-2">
+                  <span className="w-2 h-2 bg-[var(--blue)] rounded-full animate-bounce"></span>
+                  <span className="w-2 h-2 bg-[var(--blue)] rounded-full animate-bounce delay-75"></span>
+                  <span className="w-2 h-2 bg-[var(--blue)] rounded-full animate-bounce delay-150"></span>
+                </div>
+              ) : (
+                <p className="mt-2 text-sm">{aiResponse}</p>
+              )}
+              {!isProcessing && (
+                <button 
+                  className="mt-4 text-xs underline text-gray-500 hover:text-black"
+                  onClick={() => {
+                    setSelection(null)
+                    setAiResponse(null)
+                    invoke('set_overlay_interactive', { interactive: true })
+                  }}
+                >
+                  Clear Selection
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {overlayState === 'ask' && !selection && !isDragging && (
         <div className="absolute bottom-12 right-12">
           <div className="ask-card p-6 pointer-events-auto bg-white border-2 border-[var(--ink)] shadow-[4px_4px_0_var(--green)] max-w-sm rounded-lg">
-            <div className="audio flex items-center gap-1 mb-4 h-6">
-              <span className="w-1 h-3 bg-[var(--red)] inline-block animate-pulse"></span>
-              <span className="w-1 h-6 bg-[var(--red)] inline-block animate-pulse delay-75"></span>
-              <span className="w-1 h-2 bg-[var(--red)] inline-block animate-pulse delay-150"></span>
-              <span className="w-1 h-4 bg-[var(--red)] inline-block animate-pulse delay-200"></span>
-            </div>
-            <b className="text-[var(--ink)] font-sans text-lg block mb-2">Listening...</b>
-            <p className="font-mono text-sm opacity-80">I can see your screen. Highlight anything and ask a question.</p>
+            <b className="text-[var(--ink)] font-sans text-lg block mb-2">Draw to Ask</b>
+            <p className="font-mono text-sm opacity-80">Click and drag over any part of your screen to capture and ask MYLO about it.</p>
           </div>
         </div>
       )}
