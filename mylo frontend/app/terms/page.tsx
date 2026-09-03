@@ -54,7 +54,7 @@ export default function TermsPage() {
             <li>Misrepresent MYLO&apos;s output as your own original work in contexts where AI assistance is prohibited.</li>
           </ul>
           <p className="mt-4">
-            MYLO&apos;s overlay exclusion feature (WDA_EXCLUDEFROMCAPTURE) is a Windows-native capability provided for <strong>privacy, streaming, and productivity purposes only</strong>. You are solely responsible for ensuring your use of MYLO complies with all applicable laws, regulations, institutional policies, and contractual obligations. We reserve the right to suspend or terminate your access if we become aware of prohibited use.
+            MYLO&apos;s overlay exclusion feature (<code>WDA_EXCLUDEFROMCAPTURE</code> on Windows / <code>NSWindow.sharingType</code> on macOS) is an OS-native capability provided for <strong>privacy, streaming, and productivity purposes only</strong>. You are solely responsible for ensuring your use of MYLO complies with all applicable laws, regulations, institutional policies, and contractual obligations. We reserve the right to suspend or terminate your access if we become aware of prohibited use.
           </p>
 
           <h2 className="text-2xl font-bold text-[#1e1e1e] mt-10">5. No Warranties</h2>

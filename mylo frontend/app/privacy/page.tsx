@@ -39,7 +39,7 @@ export default function PrivacyPage() {
 
           <h2 className="text-2xl font-bold text-[#1e1e1e] mt-10">3. Exclusion Layer</h2>
           <p>
-            MYLO is engineered using native OS features like <code>WDA_EXCLUDEFROMCAPTURE</code>. This means our overlays and UI elements are completely invisible to screen recording software like OBS, Discord, or Zoom. What you do with MYLO stays private to you.
+            MYLO is engineered using native OS capture exclusion APIs — <code>WDA_EXCLUDEFROMCAPTURE</code> on Windows and <code>NSWindow.sharingType</code> on macOS. This means our overlays and UI elements are completely invisible to screen recording software like OBS, Discord, or Zoom. What you do with MYLO stays private to you.
           </p>
 
           <h2 className="text-2xl font-bold text-[#1e1e1e] mt-10">4. Telemetry and Analytics</h2>
