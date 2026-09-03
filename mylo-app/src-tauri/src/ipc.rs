@@ -72,8 +72,8 @@ pub fn capture_active_monitor() -> Vec<u8> {
 }
 
 #[command]
-pub fn capture_screen_crop(x: i32, y: i32, width: u32, height: u32) -> Option<String> {
-    crate::screen_capture::capture_crop(x, y, width, height)
+pub async fn capture_screen_crop(x: i32, y: i32, width: u32, height: u32) -> Result<Option<String>, String> {
+    Ok(crate::screen_capture::capture_crop_async(x, y, width, height).await)
 }
 
 #[command]
