@@ -23,10 +23,80 @@ export default function Page() {
   const [mode, setMode] = useState<Mode>('coach')
   const [openFaq, setOpenFaq] = useState<number | null>(0)
   const [platform, setPlatform] = useState<'mac' | 'linux' | null>(null)
+  const [menuOpen, setMenuOpen] = useState(false)
   const ActiveIcon = modes[mode].icon
-  const showComingSoon = (target: 'mac' | 'linux') => setPlatform(target)
+  const showComingSoon = (target: 'mac' | 'linux') => {
+    setPlatform(target)
+    setMenuOpen(false)
+  }
   return <main>
-    <nav className="nav shell"><a href="#top" className="brand"><span className="brand-mark">✳</span><span><strong>MYLO</strong><small>[os-native engine]</small></span></a><div className="nav-links"><a href="#modes">Modes</a><a href="#architecture">Architecture</a><a href="#privacy">Privacy</a><a href="#pricing">Pricing</a></div><div className="nav-actions"><a href="#pricing" className="sketch-button nav-download"><Download size={15}/> Download for Windows <small>(v0.9 Beta)</small></a><button className="platform-trigger" onClick={() => showComingSoon('mac')} aria-label="See macOS availability"><img src="https://thesvg.org/icons/apple/mono.svg" alt="" /></button><button className="platform-trigger" onClick={() => showComingSoon('linux')} aria-label="See Linux availability"><img src="https://thesvg.org/icons/linux/mono.svg" alt="" /></button></div><button className="icon-button mobile-menu" aria-label="Open navigation"><Menu size={20}/></button></nav>
+    <nav className="nav shell">
+      <a href="#top" className="brand" onClick={() => setMenuOpen(false)}>
+        <span className="brand-mark">✳</span>
+        <span><strong>MYLO</strong><small>[os-native engine]</small></span>
+      </a>
+      <div className="nav-links">
+        <a href="#modes">Modes</a>
+        <a href="#privacy">Stealth</a>
+        <a href="#architecture">Architecture</a>
+        <a href="#pricing">Pricing</a>
+      </div>
+      <div className="nav-actions">
+        <a href="#pricing" className="sketch-button nav-download">
+          <Download size={15}/> Download for Windows <small>(v0.9 Beta)</small>
+        </a>
+        <button className="platform-trigger" onClick={() => showComingSoon('mac')} aria-label="See macOS availability">
+          <img src="https://thesvg.org/icons/apple/mono.svg" alt="" />
+        </button>
+        <button className="platform-trigger" onClick={() => showComingSoon('linux')} aria-label="See Linux availability">
+          <img src="https://thesvg.org/icons/linux/mono.svg" alt="" />
+        </button>
+      </div>
+      <button 
+        className={`mobile-menu ${menuOpen ? 'active' : ''}`} 
+        onClick={() => setMenuOpen(!menuOpen)} 
+        aria-label={menuOpen ? "Close navigation" : "Open navigation"}
+        aria-expanded={menuOpen}
+      >
+        {menuOpen ? <X size={20}/> : <Menu size={20}/>}
+      </button>
+
+      {menuOpen && (
+        <div className="mobile-nav-drawer">
+          <div className="mobile-nav-links">
+            <a href="#modes" onClick={() => setMenuOpen(false)}>
+              <span>01. Modes</span> <ArrowRight size={14}/>
+            </a>
+            <a href="#privacy" onClick={() => setMenuOpen(false)}>
+              <span>02. Stealth Mode</span> <ArrowRight size={14}/>
+            </a>
+            <a href="#architecture" onClick={() => setMenuOpen(false)}>
+              <span>03. Architecture</span> <ArrowRight size={14}/>
+            </a>
+            <a href="#pricing" onClick={() => setMenuOpen(false)}>
+              <span>04. Pricing</span> <ArrowRight size={14}/>
+            </a>
+            <Link href="/contact" onClick={() => setMenuOpen(false)}>
+              <span>05. Contact Us</span> <ArrowRight size={14}/>
+            </Link>
+          </div>
+          <div className="mobile-nav-actions">
+            <a href="#pricing" className="sketch-button" onClick={() => setMenuOpen(false)}>
+              <Download size={15}/> Download for Windows (v0.9 Beta)
+            </a>
+            <div className="mobile-nav-platforms">
+              <button className="mobile-nav-platform-btn" onClick={() => showComingSoon('mac')}>
+                <img src="https://thesvg.org/icons/apple/mono.svg" alt="" /> macOS (Soon)
+              </button>
+              <button className="mobile-nav-platform-btn" onClick={() => showComingSoon('linux')}>
+                <img src="https://thesvg.org/icons/linux/mono.svg" alt="" /> Linux (Soon)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </nav>
+    {menuOpen && <div className="mobile-nav-backdrop" onClick={() => setMenuOpen(false)} />}
 
     <section id="top" className="hero shell"><div className="hero-copy"><div className="status-wrap"><div className="status"><CircleDot size={14}/> Windows 1-Click Install (MS Store Approved) <span>•</span> Mac Coming Soon</div><PencilLoop/></div><h1>MYLO : Motion. Your Live Operator. <em>The AI that moves with you.</em></h1><p className="lede">No sidebar chat. No switching windows. MYLO overlays real-time coaching annotations directly over DaVinci, Blender, Excel, or your terminal. <strong>And to everyone else on your call, stream, or screen share — it doesn&apos;t exist.</strong></p><div className="cta-row"><a href="#pricing" className="ink-button">Download Free <span>(Bring Your Own Key)</span><ArrowRight size={17}/></a><a href="#pricing" className="paper-button">Get Pro <span>($15/mo - All Included)</span></a></div><div className="hero-note"><RoughArrow/><span>your new co-pilot</span></div></div>
       <DesktopMockup /></section>

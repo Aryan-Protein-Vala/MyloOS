@@ -11,9 +11,7 @@ export default function PrivacyPage() {
           <span className="brand-mark">✳</span>
           <span><strong>MYLO</strong><small>[os-native engine]</small></span>
         </Link>
-        <div className="nav-links">
-          <Link href="/">Back to Home</Link>
-        </div>
+        <Link href="/" className="nav-back-link">← Back to Home</Link>
       </nav>
 
       <section className="shell max-w-3xl">
