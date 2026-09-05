@@ -3,17 +3,31 @@
 import { useState } from 'react'
 import { Sparkles, MousePointer2, Mic2, Save, ArrowRight, ShieldCheck } from 'lucide-react'
 import { RoughCircle, RoughArrow, PencilLoop } from '@/components/ui/design-system'
+import { invoke } from '@tauri-apps/api/core'
 
 export default function AppDashboard() {
   const [apiKey, setApiKey] = useState('')
   const [provider, setProvider] = useState<'gemini' | 'openai'>('gemini')
   const [status, setStatus] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
 
-  const handleSaveKey = () => {
-    // This will be connected to Tauri IPC storage.rs
-    console.log(`Saving ${provider} key:`, apiKey)
-    setStatus('Key saved securely in local keychain.')
-    setTimeout(() => setStatus(null), 3000)
+  const handleSaveKey = async () => {
+    if (!apiKey.trim()) {
+      setStatus('Please enter a key first.')
+      setTimeout(() => setStatus(null), 2000)
+      return
+    }
+    setSaving(true)
+    try {
+      await invoke('save_api_key', { provider, key: apiKey })
+      setApiKey('')
+      setStatus('Key saved securely in local store.')
+    } catch (e) {
+      setStatus(`Error saving key: ${e}`)
+    } finally {
+      setSaving(false)
+      setTimeout(() => setStatus(null), 3000)
+    }
   }
 
   return (
@@ -67,8 +81,8 @@ export default function AppDashboard() {
                 />
               </div>
 
-              <button className="ink-button mt-4" onClick={handleSaveKey}>
-                <Save size={16} /> Save Securely
+              <button className="ink-button mt-4" onClick={handleSaveKey} disabled={saving}>
+                <Save size={16} /> {saving ? 'Saving...' : 'Save Securely'}
               </button>
 
               {status && (
