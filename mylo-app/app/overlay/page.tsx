@@ -60,18 +60,23 @@ export default function OverlayPage() {
 
   // ── Event listeners ────────────────────────────────────────────────────────
   useEffect(() => {
-    if (typeof window !== 'undefined' && (window as any).__TAURI_INTERNALS__) {
-      invoke<boolean>('verify_stream_safety').then(setIsStreamSafe).catch(console.error)
+    let mounted = true
+
+    if (typeof window !== 'undefined' && (window as unknown as { __TAURI_INTERNALS__: unknown }).__TAURI_INTERNALS__) {
+      invoke<boolean>('verify_stream_safety').then((val) => {
+        if (mounted) setIsStreamSafe(val)
+      }).catch(console.error)
     }
 
     let unlistenState: (() => void) | null = null
     let unlistenTarget: (() => void) | null = null
 
     const setup = async () => {
-      if (typeof window === 'undefined' || !(window as any).__TAURI_INTERNALS__) return
+      if (typeof window === 'undefined' || !(window as unknown as { __TAURI_INTERNALS__: unknown }).__TAURI_INTERNALS__) return
 
       // Overlay state from hotkeys
-      unlistenState = await listen<OverlayMode>('overlay-state-changed', (event) => {
+      const cleanState = await listen<OverlayMode>('overlay-state-changed', (event) => {
+        if (!mounted) return
         const newMode = event.payload
         setMode(newMode)
 
@@ -94,14 +99,29 @@ export default function OverlayPage() {
         }
 
         setTimeout(() => {
-          invoke<boolean>('verify_stream_safety').then(setIsStreamSafe).catch(console.error)
+          if (mounted) {
+            invoke<boolean>('verify_stream_safety').then(setIsStreamSafe).catch(console.error)
+          }
         }, 100)
       })
 
+      if (!mounted) {
+        cleanState()
+      } else {
+        unlistenState = cleanState
+      }
+
       // Coach mode target position updates
-      unlistenTarget = await listen<{ x: number; y: number }>('target-pos-changed', (event) => {
+      const cleanTarget = await listen<{ x: number; y: number }>('target-pos-changed', (event) => {
+        if (!mounted) return
         setTargetPos(event.payload)
       })
+
+      if (!mounted) {
+        cleanTarget()
+      } else {
+        unlistenTarget = cleanTarget
+      }
     }
 
     setup().catch(console.error)
@@ -119,6 +139,7 @@ export default function OverlayPage() {
     window.addEventListener('keydown', onKeyDown)
 
     return () => {
+      mounted = false
       if (unlistenState) unlistenState()
       if (unlistenTarget) unlistenTarget()
       window.removeEventListener('keydown', onKeyDown)
@@ -148,6 +169,10 @@ export default function OverlayPage() {
   }
 
   const handlePointerUp = async (e: React.PointerEvent) => {
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId)
+    } catch {}
+
     // ── Ask Mode finish draw ──
     if (isDragging) {
       setIsDragging(false)
@@ -159,7 +184,7 @@ export default function OverlayPage() {
 
       const sel = { x, y, w, h }
       setAskSelection(sel)
-      await invoke('set_overlay_interactive', { interactive: false })
+      // Keep interactive so the user can interact with the Clear selection button
       await runAskCapture(sel)
     }
 
@@ -178,9 +203,7 @@ export default function OverlayPage() {
       const sel = { x, y, w, h }
       setDoSelection(sel)
       setDoPhase('intent')
-      // Switch to non-drawing pointer so the intent input is reachable
-      await invoke('set_overlay_interactive', { interactive: false })
-      // Re-enable pointer events for the intent card only (it's pointer-events-auto)
+      // Maintain interactivity so the user can type in the intent card
       setTimeout(() => intentInputRef.current?.focus(), 100)
     }
   }
@@ -191,8 +214,8 @@ export default function OverlayPage() {
     setAskProcessing(true)
     try {
       const base64Img: string | null = await invoke('capture_screen_crop', {
-        x: Math.max(0, Math.round(sel.x)),
-        y: Math.max(0, Math.round(sel.y)),
+        x: Math.round(sel.x),
+        y: Math.round(sel.y),
         width: Math.round(sel.w),
         height: Math.round(sel.h),
         scaleFactor: window.devicePixelRatio || 1.0,
@@ -220,8 +243,8 @@ export default function OverlayPage() {
 
     try {
       const base64Img: string | null = await invoke('capture_screen_crop', {
-        x: Math.max(0, Math.round(doSelection.x)),
-        y: Math.max(0, Math.round(doSelection.y)),
+        x: Math.round(doSelection.x),
+        y: Math.round(doSelection.y),
         width: Math.round(doSelection.w),
         height: Math.round(doSelection.h),
         scaleFactor: window.devicePixelRatio || 1.0,
@@ -241,6 +264,12 @@ export default function OverlayPage() {
         return
       }
 
+      const dpr = window.devicePixelRatio || 1.0
+      if (action.action_type !== 'scroll') {
+        if (action.x != null) action.x = Math.round(doSelection.x + (action.x / dpr))
+        if (action.y != null) action.y = Math.round(doSelection.y + (action.y / dpr))
+      }
+
       setPendingAction(action)
       setDoPhase('approve')
     } catch (err) {
@@ -255,10 +284,13 @@ export default function OverlayPage() {
     setDoPhase('executing')
     setDoError(null)
     try {
-      await invoke('execute_do_action', { action: pendingAction })
+      // Must dismiss overlay first, otherwise Enigo clicks hit the overlay itself!
       await dismissOverlay()
-    } catch (e: any) {
-      setDoError(`Action failed: ${e}`)
+      // Give window manager 150ms to hide overlay and restore focus to target app
+      await new Promise((r) => setTimeout(r, 150))
+      await invoke('execute_do_action', { action: pendingAction })
+    } catch (e) {
+      setDoError(`Action failed: ${e instanceof Error ? e.message : String(e)}`)
       setDoPhase('approve')
     }
   }
@@ -278,11 +310,13 @@ export default function OverlayPage() {
   const isDoDrawing = mode === 'do' && (doPhase === 'idle' || doPhase === 'drawing')
   const needsPointerEvents =
     (mode === 'ask' && isAskDrawable) ||
+    (mode === 'ask' && !!askSelection) ||
     isDoDrawing ||
-    mode === 'do' // do mode cards are pointer-events-auto individually
+    (mode === 'do' && doPhase !== 'idle') // Keep pointer events for cards in do mode
 
   return (
     <div
+      id="mylo-overlay-root"
       className={`fixed inset-0 w-screen h-screen z-[9999] overflow-hidden bg-transparent ${
         needsPointerEvents ? 'pointer-events-auto' : 'pointer-events-none'
       } ${isAskDrawable || isDoDrawing ? 'cursor-crosshair' : ''}`}
@@ -355,7 +389,13 @@ export default function OverlayPage() {
           style={{ left: askSelection.x, top: askSelection.y, width: askSelection.w, height: askSelection.h }}
         >
           <RoughCircle className="text-[var(--red)] drop-shadow-md" />
-          <div className="absolute top-0 right-[-320px] w-72 pointer-events-auto">
+          <div
+            className={`absolute top-0 w-72 pointer-events-auto ${
+              typeof window !== 'undefined' && askSelection.x + askSelection.w + 320 > window.innerWidth
+                ? 'right-full mr-4'
+                : 'left-full ml-4'
+            }`}
+          >
             <div className="speech">
               <b>MYLO says:</b>
               <br />
@@ -438,7 +478,10 @@ export default function OverlayPage() {
               onChange={(e) => setUserIntent(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') runDoAnalyze()
-                if (e.key === 'Escape') handleRejectAction()
+                if (e.key === 'Escape') {
+                  e.stopPropagation()
+                  handleRejectAction()
+                }
               }}
               placeholder="e.g. Click the Export button"
               className="w-full p-3 border-2 border-[var(--ink)] bg-white font-mono text-sm focus:outline-none focus:ring-2 focus:ring-[var(--blue)]"

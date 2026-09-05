@@ -1,8 +1,8 @@
 'use client'
 
-import { useState } from 'react'
-import { Sparkles, MousePointer2, Mic2, Save, ArrowRight, ShieldCheck } from 'lucide-react'
-import { RoughCircle, RoughArrow, PencilLoop } from '@/components/ui/design-system'
+import { useEffect, useState } from 'react'
+import { Sparkles, MousePointer2, Mic2, Save, ShieldCheck } from 'lucide-react'
+import { RoughArrow, PencilLoop } from '@/components/ui/design-system'
 import { invoke } from '@tauri-apps/api/core'
 
 export default function AppDashboard() {
@@ -10,13 +10,38 @@ export default function AppDashboard() {
   const [provider, setProvider] = useState<'gemini' | 'openai'>('gemini')
   const [status, setStatus] = useState<{ type: 'success' | 'error'; msg: string } | null>(null)
   const [saving, setSaving] = useState(false)
+  const [mounted, setMounted] = useState(false)
+  const isMac = typeof navigator !== 'undefined' ? navigator.userAgent.includes('Mac') : true
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setMounted(true)
+    if (typeof window !== 'undefined' && (window as unknown as { __TAURI_INTERNALS__: unknown }).__TAURI_INTERNALS__) {
+      invoke<string>('get_active_provider')
+        .then((p) => {
+          if (p === 'gemini' || p === 'openai') setProvider(p)
+        })
+        .catch(console.error)
+    }
+  }, [])
+
+  const handleSelectProvider = async (p: 'gemini' | 'openai') => {
+    setProvider(p)
+    if (typeof window !== 'undefined' && (window as unknown as { __TAURI_INTERNALS__: unknown }).__TAURI_INTERNALS__) {
+      try {
+        await invoke('set_active_provider', { provider: p })
+      } catch (err) {
+        console.error('Failed to set active provider:', err)
+      }
+    }
+  }
 
   const handleSaveKey = async () => {
     if (!apiKey.trim()) {
       setStatus({ type: 'error', msg: 'Please enter a key first.' })
       return
     }
-    if (!(window as any).__TAURI_INTERNALS__) {
+    if (!(window as unknown as { __TAURI_INTERNALS__: unknown }).__TAURI_INTERNALS__) {
       setStatus({ type: 'error', msg: 'Not running in Tauri. Cannot save.' })
       return
     }
@@ -63,13 +88,13 @@ export default function AppDashboard() {
               <div className="flex gap-4 mb-2">
                 <button 
                   className={`mode-tab ${provider === 'gemini' ? 'active' : ''}`}
-                  onClick={() => setProvider('gemini')}
+                  onClick={() => handleSelectProvider('gemini')}
                 >
                   <Sparkles size={16} /> Gemini
                 </button>
                 <button 
                   className={`mode-tab ${provider === 'openai' ? 'active' : ''}`}
-                  onClick={() => setProvider('openai')}
+                  onClick={() => handleSelectProvider('openai')}
                 >
                   <MousePointer2 size={16} /> OpenAI
                 </button>
@@ -109,10 +134,10 @@ export default function AppDashboard() {
           <div className="mode-text">
             <span className="eyebrow">SHORTCUTS</span>
             <h3>Quick Actions</h3>
-            <p>Use these global shortcuts from anywhere on your {navigator.userAgent.includes('Mac') ? 'Mac' : 'PC'}.</p>
+            <p>Use these global shortcuts from anywhere on your {mounted ? (isMac ? 'Mac' : 'PC') : 'computer'}.</p>
             <ul className="mt-6">
-              <li><strong>{navigator.userAgent.includes('Mac') ? 'Cmd' : 'Ctrl'} + Shift + Space</strong>: Toggle voice ask mode</li>
-              <li><strong>{navigator.userAgent.includes('Mac') ? 'Cmd' : 'Ctrl'} + Shift + D</strong>: Summon ghost cursor / Do mode</li>
+              <li><strong>{mounted ? (isMac ? 'Cmd' : 'Ctrl') : 'Cmd'} + Shift + Space</strong>: Toggle Ask Mode (draw & ask)</li>
+              <li><strong>{mounted ? (isMac ? 'Cmd' : 'Ctrl') : 'Cmd'} + Shift + D</strong>: Summon ghost cursor / Do mode</li>
               <li><strong>Esc (Double tap)</strong>: Hide all overlays</li>
             </ul>
 
@@ -124,7 +149,7 @@ export default function AppDashboard() {
                 </div>
                 <div>
                   <p className="font-bold">Listening...</p>
-                  <p className="text-sm font-mono opacity-70">"What does this error mean?"</p>
+                  <p className="text-sm font-mono opacity-70">&quot;What does this error mean?&quot;</p>
                 </div>
               </div>
               <div className="absolute -bottom-10 -right-8 w-32 text-red-500 rotate-[-15deg] pointer-events-none">

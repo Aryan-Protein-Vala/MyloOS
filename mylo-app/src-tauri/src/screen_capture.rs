@@ -119,28 +119,28 @@ impl GraphicsCaptureApiHandler for CaptureHandler {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// Main capture entry-point. Works on Windows (WGC) and macOS (xcap/SCK).
-pub async fn capture_crop_async(x: i32, y: i32, width: u32, height: u32) -> Result<Option<String>, String> {
+pub async fn capture_crop_async(x: i32, y: i32, width: u32, height: u32, scale_factor: f64) -> Result<Option<String>, String> {
     // ── Windows path ────────────────────────────────────────────────────────
     #[cfg(target_os = "windows")]
     {
+        let phys_x = (x as f64 * scale_factor) as i32;
+        let phys_y = (y as f64 * scale_factor) as i32;
+        let phys_w = (width as f64 * scale_factor) as u32;
+        let phys_h = (height as f64 * scale_factor) as u32;
+
         let (tx, rx) = oneshot::channel();
         
-        // Find monitor containing (x,y)
         let monitors = Monitor::enumerate().map_err(|_| "Failed to enumerate monitors".to_string())?;
-        let mut target_monitor = monitors.first().cloned();
-        // Since we don't know the exact x,y of the Monitor from windows-capture easily without GDI,
-        // we'll just try to use the primary monitor for now, or if it has `from_point`.
-        // Let's use the primary monitor as fallback but ideally we'd map it.
-        // Actually, windows-capture handles primary monitor. Let's just use primary and ignore 
-        // the multi-monitor bug for Windows for a second, or use the first monitor.
-        let primary = Monitor::primary().map_err(|_| "Failed to get primary monitor".to_string())?;
+        let target_monitor = Monitor::primary().or_else(|_| {
+            monitors.into_iter().next().ok_or_else(|| "No monitor found".to_string())
+        })?;
         
         let settings = Settings::new(
-            primary.into(),
+            target_monitor.into(),
             CursorCaptureSettings::WithoutCursor,
             DrawBorderSettings::WithoutBorder,
             ColorFormat::Bgra8,
-            (x, y, width, height, tx),
+            (phys_x, phys_y, phys_w, phys_h, tx),
         );
         std::thread::spawn(move || {
             let _ = windows_capture::capture::GraphicsCaptureApi::start::<CaptureHandler>(settings);
@@ -155,9 +155,9 @@ pub async fn capture_crop_async(x: i32, y: i32, width: u32, height: u32) -> Resu
             use xcap::Monitor;
             use image::imageops::FilterType;
 
-            let monitors = Monitor::all().map_err(|e| format!("Capture failed (Permission denied?): {}", e))?;
+            let monitors = Monitor::all().map_err(|e| format!("Capture failed (check Screen Recording permission in System Settings): {}", e))?;
             
-            // Find the monitor that contains the top-left of our crop box
+            // Find the monitor that contains the top-left of our crop box using logical coordinates
             let target_monitor = monitors.into_iter().find(|m| {
                 let mx = m.x().unwrap_or(0);
                 let my = m.y().unwrap_or(0);
@@ -170,30 +170,32 @@ pub async fn capture_crop_async(x: i32, y: i32, width: u32, height: u32) -> Resu
 
             let mx = target_monitor.x().unwrap_or(0);
             let my = target_monitor.y().unwrap_or(0);
+            let mon_scale = target_monitor.scale_factor().unwrap_or(scale_factor as f32) as f64;
 
             let img = target_monitor.capture_image().map_err(|e| format!("Capture image failed: {}", e))?;
 
             let iw = img.width();
             let ih = img.height();
 
-            // Localize coordinates to the specific monitor
-            let local_x = (x - mx).max(0) as u32;
-            let local_y = (y - my).max(0) as u32;
+            // Localize coordinates to the specific monitor (in logical points)
+            let local_x = (x - mx).max(0);
+            let local_y = (y - my).max(0);
 
-            let cx = local_x.min(iw.saturating_sub(1));
-            let cy = local_y.min(ih.saturating_sub(1));
-            let cw = width.min(iw - cx);
-            let ch = height.min(ih - cy);
+            // Convert to physical pixels for image cropping
+            let cx = ((local_x as f64 * mon_scale) as u32).min(iw.saturating_sub(1));
+            let cy = ((local_y as f64 * mon_scale) as u32).min(ih.saturating_sub(1));
+            let cw = ((width as f64 * mon_scale) as u32).min(iw - cx);
+            let ch = ((height as f64 * mon_scale) as u32).min(ih - cy);
             
             if cw == 0 || ch == 0 { return Ok(None); }
 
             let mut cropped = image::imageops::crop_imm(&img, cx, cy, cw, ch).to_image();
 
-            if cw > 1024 || ch > 1024 {
+            if cw > 2048 || ch > 2048 {
                 let (nw, nh) = if cw > ch {
-                    (1024u32, (1024.0 * ch as f32 / cw as f32) as u32)
+                    (2048u32, (2048.0 * ch as f32 / cw as f32) as u32)
                 } else {
-                    ((1024.0 * cw as f32 / ch as f32) as u32, 1024u32)
+                    ((2048.0 * cw as f32 / ch as f32) as u32, 2048u32)
                 };
                 cropped = image::imageops::resize(&cropped, nw, nh, FilterType::Triangle);
             }

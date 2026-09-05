@@ -1,3 +1,5 @@
+#![allow(unexpected_cfgs)]
+
 pub mod ipc;
 pub mod hotkey;
 pub mod storage;
@@ -18,17 +20,20 @@ use windows::Win32::UI::WindowsAndMessaging::{
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_log::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             ipc::toggle_overlay,
             ipc::save_api_key,
             ipc::get_api_key,
+            ipc::set_active_provider,
+            ipc::get_active_provider,
             ipc::capture_screen_crop,
             ipc::set_overlay_interactive,
             ipc::verify_stream_safety,
             ipc::execute_do_action,
+            ipc::ask_ai,
+            ipc::analyze_for_do_mode,
         ])
         .setup(|app| {
             // ── Overlay window: make it click-through, topmost, and stream-safe ──
@@ -87,9 +92,9 @@ pub fn run() {
         .expect("error while building tauri application")
         .run(|app_handle, event| match event {
             tauri::RunEvent::WindowEvent { label, event: tauri::WindowEvent::CloseRequested { api, .. }, .. } => {
-                if label == "main" {
+                if label == "main" || label == "overlay" {
                     api.prevent_close();
-                    if let Some(window) = app_handle.get_webview_window("main") {
+                    if let Some(window) = app_handle.get_webview_window(&label) {
                         let _ = window.hide();
                     }
                 }

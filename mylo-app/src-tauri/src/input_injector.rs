@@ -45,11 +45,20 @@ pub fn execute_action(action: &DoAction) -> Result<(), String> {
                 .map_err(|e| e.to_string())?;
         }
         "type" => {
+            if let (Some(x), Some(y)) = (action.x, action.y) {
+                enigo
+                    .move_mouse(x, y, Coordinate::Abs)
+                    .map_err(|e| e.to_string())?;
+                enigo
+                    .button(Button::Left, Click)
+                    .map_err(|e| e.to_string())?;
+                std::thread::sleep(std::time::Duration::from_millis(50));
+            }
             let text = action.text.as_deref().ok_or("type requires text")?;
             enigo.text(text).map_err(|e| e.to_string())?;
         }
         "scroll" => {
-            let y = action.y.unwrap_or(-3);
+            let y = action.y.unwrap_or(-3).clamp(-30, 30);
             enigo
                 .scroll(y, enigo::Axis::Vertical)
                 .map_err(|e| e.to_string())?;
