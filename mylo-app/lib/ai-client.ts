@@ -1,13 +1,13 @@
 import { invoke } from '@tauri-apps/api/core'
 
 export interface DoAction {
-  action_type: 'click' | 'move' | 'type' | 'scroll'
+  actionType: 'click' | 'doubleClick' | 'rightClick' | 'move' | 'type' | 'scroll' | 'none'
   x?: number
   y?: number
   ratioX?: number
   ratioY?: number
   text?: string
-  scroll_amount?: number
+  scrollAmount?: number
   description: string
 }
 

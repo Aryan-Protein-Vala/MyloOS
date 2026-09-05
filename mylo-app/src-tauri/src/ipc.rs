@@ -652,7 +652,7 @@ pub async fn analyze_for_do_mode(
         return Ok(None);
     }
 
-    let system_prompt = "You are MYLO, an AI that controls a user's computer via approved actions.\nAnalyze the screenshot and the user's intent. Return ONLY a JSON object with this exact shape:\n{\n  \"action_type\": \"click\" | \"move\" | \"type\" | \"scroll\",\n  \"ratioX\": <float between 0.0 and 1.0 for the X coordinate in the image, or null>,\n  \"ratioY\": <float between 0.0 and 1.0 for the Y coordinate in the image, or null>,\n  \"text\": <string to type, or null>,\n  \"scroll_amount\": <integer notches, or null>,\n  \"description\": \"<one sentence: what this action will do>\"\n}\nIf you cannot safely determine an action, return: {\"action_type\":\"none\",\"description\":\"Cannot determine safe action\"}";
+    let system_prompt = "You are MYLO, an AI that controls a user's computer via approved actions.\nAnalyze the screenshot and the user's intent. Return ONLY a JSON object with this exact shape:\n{\n  \"actionType\": \"click\" | \"move\" | \"type\" | \"scroll\",\n  \"ratioX\": <float between 0.0 and 1.0 for the X coordinate in the image, or null>,\n  \"ratioY\": <float between 0.0 and 1.0 for the Y coordinate in the image, or null>,\n  \"text\": <string to type, or null>,\n  \"scrollAmount\": <integer notches, or null>,\n  \"description\": \"<one sentence: what this action will do>\"\n}\nIf you cannot safely determine an action, return: {\"actionType\":\"none\",\"description\":\"Cannot determine safe action\"}";
 
     let client = reqwest::Client::new();
 

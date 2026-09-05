@@ -523,7 +523,7 @@ export default function OverlayPage() {
             <div className="flex items-center gap-2 mb-2">
               <MousePointer2 size={14} className="text-[var(--blue)]" />
               <span className="font-mono text-xs text-gray-500 uppercase tracking-wider">
-                {pendingAction.action_type}
+                {pendingAction.actionType}
               </span>
             </div>
             <b className="block text-sm mb-1">{pendingAction.description}</b>
