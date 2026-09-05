@@ -13,7 +13,7 @@
 //!    `approve_do_action` armed it first, and re-validates the action against
 //!    the real desktop bounds even then.
 
-use serde::Serialize;
+use serde::{Serialize, Deserialize};
 use tauri::{command, AppHandle, Manager, WebviewWindow};
 
 use crate::input_injector::{DesktopBounds, DoAction};
@@ -229,24 +229,34 @@ pub fn get_platform() -> String {
 /// Returns `Err` when the key could not be stored, so the UI can stop claiming
 /// success on failure.
 #[command]
-pub fn save_api_key(provider: String, key: String) -> Result<(), String> {
-    crate::storage::save_key(&provider, &key)
+pub fn save_api_key(app_handle: AppHandle, provider: String, key: String) -> Result<(), String> {
+    crate::storage::save_key(&app_handle, &provider, &key)
 }
 
 #[command]
-pub fn get_api_key(provider: String) -> Result<Option<String>, String> {
-    crate::storage::get_key(&provider)
+pub fn get_api_key(app_handle: AppHandle, provider: String) -> Result<Option<String>, String> {
+    Ok(crate::storage::get_key(&app_handle, &provider))
 }
 
 #[command]
-pub fn delete_api_key(provider: String) -> Result<(), String> {
-    crate::storage::delete_key(&provider)
+pub fn delete_api_key(app_handle: AppHandle, provider: String) -> Result<(), String> {
+    crate::storage::delete_key(&app_handle, &provider)
 }
 
 /// Which providers have a key stored, without revealing the keys themselves.
 #[command]
-pub fn list_saved_providers() -> Vec<String> {
-    crate::storage::stored_providers()
+pub fn list_saved_providers(app_handle: AppHandle) -> Vec<String> {
+    crate::storage::stored_providers(&app_handle)
+}
+
+#[command]
+pub fn set_active_provider(app_handle: AppHandle, provider: String) -> Result<(), String> {
+    crate::storage::save_active_provider(&app_handle, &provider)
+}
+
+#[command]
+pub fn get_active_provider(app_handle: AppHandle) -> String {
+    crate::storage::get_active_provider(&app_handle)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -254,7 +264,7 @@ pub fn list_saved_providers() -> Vec<String> {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// A rectangle in global desktop physical pixels.
-#[derive(Serialize, Clone, Copy, Debug)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug)]
 pub struct GlobalRect {
     pub x: i32,
     pub y: i32,
@@ -425,4 +435,270 @@ pub fn cancel_do_action(app_handle: AppHandle) {
     if let Ok(mut guard) = app_handle.state::<AppState>().actions.lock() {
         guard.disarm();
     }
+}
+async fn call_gemini_ask(
+    client: &reqwest::Client,
+    key: &str,
+    system_prompt: &str,
+    user_prompt: &str,
+    base64_image: &str,
+) -> Result<String, String> {
+    let url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
+    let body = serde_json::json!({
+        "contents": [{
+            "parts": [
+                { "text": format!("{}\n\n{}", system_prompt, user_prompt) },
+                { "inline_data": { "mime_type": "image/jpeg", "data": base64_image } }
+            ]
+        }]
+    });
+
+    let resp = client.post(url)
+        .header("Content-Type", "application/json")
+        .header("x-goog-api-key", key)
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if !resp.status().is_success() {
+        return Err(format!("Gemini error {}", resp.status()));
+    }
+
+    let json: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
+    if let Some(text) = json["candidates"][0]["content"]["parts"][0]["text"].as_str() {
+        return Ok(text.to_string());
+    }
+    Ok("No response generated.".into())
+}
+
+async fn call_openai_ask(
+    client: &reqwest::Client,
+    key: &str,
+    system_prompt: &str,
+    user_prompt: &str,
+    base64_image: &str,
+) -> Result<String, String> {
+    let body = serde_json::json!({
+        "model": "gpt-4o",
+        "messages": [{
+            "role": "user",
+            "content": [
+                { "type": "text", "text": format!("{}\n\n{}", system_prompt, user_prompt) },
+                { "type": "image_url", "image_url": { "url": format!("data:image/jpeg;base64,{}", base64_image) } }
+            ]
+        }]
+    });
+
+    let resp = client.post("https://api.openai.com/v1/chat/completions")
+        .header("Content-Type", "application/json")
+        .header("Authorization", format!("Bearer {}", key))
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if !resp.status().is_success() {
+        return Err(format!("OpenAI error {}", resp.status()));
+    }
+
+    let json: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
+    if let Some(text) = json["choices"][0]["message"]["content"].as_str() {
+        return Ok(text.to_string());
+    }
+    Ok("No response generated.".into())
+}
+
+#[command]
+pub async fn ask_ai(app_handle: tauri::AppHandle, prompt: String, base64_image: String) -> Result<String, String> {
+    let active_provider = crate::storage::get_active_provider(&app_handle);
+    let gemini_key = crate::storage::get_key(&app_handle, "gemini");
+    let openai_key = crate::storage::get_key(&app_handle, "openai");
+
+    if gemini_key.is_none() && openai_key.is_none() {
+        return Ok("Error: Please set your Gemini or OpenAI API key in MYLO settings.".into());
+    }
+
+    let system_prompt = "You are MYLO, an invisible AI overlay assistant running on the user's desktop.\nYou see a cropped screenshot of what the user circled.\nAnswer concisely (2-4 sentences max). Be direct and useful.";
+    let user_prompt = format!("User question: {}", if prompt.is_empty() { "What is this?" } else { &prompt });
+
+    let client = reqwest::Client::new();
+
+    let order: [(&str, Option<String>); 2] = if active_provider == "openai" {
+        [("openai", openai_key), ("gemini", gemini_key)]
+    } else {
+        [("gemini", gemini_key), ("openai", openai_key)]
+    };
+
+    let mut last_error = String::new();
+    for (p, maybe_key) in order {
+        if let Some(key) = maybe_key {
+            let res = if p == "gemini" {
+                call_gemini_ask(&client, &key, system_prompt, &user_prompt, &base64_image).await
+            } else {
+                call_openai_ask(&client, &key, system_prompt, &user_prompt, &base64_image).await
+            };
+
+            match res {
+                Ok(text) => return Ok(text),
+                Err(err) => {
+                    eprintln!("[MYLO AI ask] Provider {} failed: {}", p, err);
+                    last_error = err;
+                }
+            }
+        }
+    }
+
+    Err(if last_error.is_empty() {
+        "No configured provider available.".into()
+    } else {
+        format!("All providers failed. Last error: {}", last_error)
+    })
+}
+
+async fn call_gemini_do(
+    client: &reqwest::Client,
+    key: &str,
+    system_prompt: &str,
+    user_intent: &str,
+    base64_image: &str,
+) -> Result<Option<crate::input_injector::DoAction>, String> {
+    let url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
+    let body = serde_json::json!({
+        "contents": [{
+            "parts": [
+                { "text": format!("{}\n\nUser intent: \"{}\"", system_prompt, user_intent) },
+                { "inline_data": { "mime_type": "image/jpeg", "data": base64_image } }
+            ]
+        }],
+        "generationConfig": { "responseMimeType": "application/json" }
+    });
+
+    let resp = client.post(url)
+        .header("Content-Type", "application/json")
+        .header("x-goog-api-key", key)
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if !resp.status().is_success() {
+        return Err(format!("Gemini error {}", resp.status()));
+    }
+
+    let json: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
+    if let Some(text) = json["candidates"][0]["content"]["parts"][0]["text"].as_str() {
+        if let Ok(action) = serde_json::from_str::<crate::input_injector::DoAction>(text) {
+            if action.action_type == "none" { return Ok(None); }
+            return Ok(Some(action));
+        }
+    }
+    Ok(None)
+}
+
+async fn call_openai_do(
+    client: &reqwest::Client,
+    key: &str,
+    system_prompt: &str,
+    user_intent: &str,
+    base64_image: &str,
+) -> Result<Option<crate::input_injector::DoAction>, String> {
+    let body = serde_json::json!({
+        "model": "gpt-4o",
+        "response_format": { "type": "json_object" },
+        "messages": [{
+            "role": "user",
+            "content": [
+                { "type": "text", "text": format!("{}\n\nUser intent: \"{}\"", system_prompt, user_intent) },
+                { "type": "image_url", "image_url": { "url": format!("data:image/jpeg;base64,{}", base64_image) } }
+            ]
+        }]
+    });
+
+    let resp = client.post("https://api.openai.com/v1/chat/completions")
+        .header("Content-Type", "application/json")
+        .header("Authorization", format!("Bearer {}", key))
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if !resp.status().is_success() {
+        return Err(format!("OpenAI error {}", resp.status()));
+    }
+
+    let json: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
+    if let Some(text) = json["choices"][0]["message"]["content"].as_str() {
+        if let Ok(action) = serde_json::from_str::<crate::input_injector::DoAction>(text) {
+            if action.action_type == "none" { return Ok(None); }
+            return Ok(Some(action));
+        }
+    }
+    Ok(None)
+}
+
+#[command]
+pub async fn analyze_for_do_mode(
+    app_handle: tauri::AppHandle,
+    base64_image: String,
+    user_intent: String,
+    rect: crate::ipc::GlobalRect,
+) -> Result<Option<crate::input_injector::DoAction>, String> {
+    let active_provider = crate::storage::get_active_provider(&app_handle);
+    let gemini_key = crate::storage::get_key(&app_handle, "gemini");
+    let openai_key = crate::storage::get_key(&app_handle, "openai");
+
+    if gemini_key.is_none() && openai_key.is_none() {
+        return Ok(None);
+    }
+
+    let system_prompt = "You are MYLO, an AI that controls a user's computer via approved actions.\nAnalyze the screenshot and the user's intent. Return ONLY a JSON object with this exact shape:\n{\n  \"action_type\": \"click\" | \"move\" | \"type\" | \"scroll\",\n  \"ratioX\": <float between 0.0 and 1.0 for the X coordinate in the image, or null>,\n  \"ratioY\": <float between 0.0 and 1.0 for the Y coordinate in the image, or null>,\n  \"text\": <string to type, or null>,\n  \"scroll_amount\": <integer notches, or null>,\n  \"description\": \"<one sentence: what this action will do>\"\n}\nIf you cannot safely determine an action, return: {\"action_type\":\"none\",\"description\":\"Cannot determine safe action\"}";
+
+    let client = reqwest::Client::new();
+
+    let order: [(&str, Option<String>); 2] = if active_provider == "openai" {
+        [("openai", openai_key), ("gemini", gemini_key)]
+    } else {
+        [("gemini", gemini_key), ("openai", openai_key)]
+    };
+
+    let mut last_error = String::new();
+    let mut raw_action = None;
+    
+    for (p, maybe_key) in order {
+        if let Some(key) = maybe_key {
+            let res = if p == "gemini" {
+                call_gemini_do(&client, &key, system_prompt, &user_intent, &base64_image).await
+            } else {
+                call_openai_do(&client, &key, system_prompt, &user_intent, &base64_image).await
+            };
+
+            match res {
+                Ok(action) => {
+                    raw_action = action;
+                    break;
+                }
+                Err(err) => {
+                    eprintln!("[MYLO AI do] Provider {} failed: {}", p, err);
+                    last_error = err;
+                }
+            }
+        }
+    }
+
+    if let Some(mut action) = raw_action {
+        // Convert ratios back into global physical desktop coordinates!
+        if let Some(rx) = action.ratio_x {
+            action.x = Some(rect.x + (rx * rect.width as f64).round() as i32);
+        }
+        if let Some(ry) = action.ratio_y {
+            action.y = Some(rect.y + (ry * rect.height as f64).round() as i32);
+        }
+        return Ok(Some(action));
+    }
+
+    if !last_error.is_empty() {
+        eprintln!("[MYLO AI do] All providers failed: {}", last_error);
+    }
+    Ok(None)
 }

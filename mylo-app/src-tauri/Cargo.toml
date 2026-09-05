@@ -1,15 +1,15 @@
 [package]
-name = "mylo"
+name = "app"
 version = "0.1.0"
 description = "MYLO: Motion. Your Live Operator."
 authors = ["MYLO Team"]
 license = "MIT"
-repository = "https://github.com/Aryan-Protein-Vala/MyloOS"
+repository = ""
 edition = "2021"
 rust-version = "1.77.2"
 
 [lib]
-name = "mylo_lib"
+name = "app_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
@@ -19,51 +19,26 @@ tauri-build = { version = "2.6.3", features = [] }
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 log = "0.4"
-# `macos-private-api` is not optional: tauri.conf.json sets
-# `app.macOSPrivateApi: true` for the transparent overlay, and tauri-build
-# hard-errors if the config asks for it without this feature.
 tauri = { version = "2.11.3", features = ["tray-icon", "image-png", "macos-private-api"] }
 tauri-plugin-log = "2"
 tauri-plugin-global-shortcut = "2.3.2"
-image = "=0.25.10"
+image = { version = "0.25.1", features = ["jpeg", "png"] }
 base64 = "0.22.1"
-tokio = { version = "1.0", features = ["rt-multi-thread", "sync", "time", "macros"] }
-enigo = { version = "=0.3.0", features = ["serde"] }
+tokio = { version = "1.0", features = ["full"] }
+enigo = { version = "0.3", features = ["serde"] }
+keyring = { version = "3.6.3", features = ["apple-native", "windows-native", "linux-native"] }
+reqwest = { version = "0.13.3", features = ["json"] }
 
 # ── Windows-only ────────────────────────────────────────────────────────────
 [target.'cfg(target_os = "windows")'.dependencies]
-# Pinned: this crate makes breaking API changes in patch-adjacent releases and
-# the capture handler below is written against exactly this version.
 windows-capture = "=1.5.0"
 windows = { version = "0.58", features = [
   "Win32_Foundation",
   "Win32_UI_WindowsAndMessaging",
   "Win32_Graphics_Gdi",
 ] }
-# Windows Credential Manager. keyring has NO default features — without an
-# explicit backend it silently falls back to an in-memory mock store.
-keyring = { version = "3.6.3", features = ["windows-native"] }
 
 # ── macOS-only ──────────────────────────────────────────────────────────────
 [target.'cfg(target_os = "macos")'.dependencies]
-xcap = "=0.9.8"
+xcap = "0.9"
 objc = "0.2"
-# macOS Keychain. See the note above about keyring's default features.
-keyring = { version = "3.6.3", features = ["apple-native"] }
-
-# ── Linux (dev convenience only; not a shipping target) ─────────────────────
-[target.'cfg(target_os = "linux")'.dependencies]
-keyring = { version = "3.6.3", features = ["linux-native"] }
-
-[features]
-# Enabled by `tauri build --features custom-protocol` (default for bundling).
-custom-protocol = ["tauri/custom-protocol"]
-
-[profile.release]
-codegen-units = 1
-lto = true
-opt-level = "s"
-strip = true
-# Deliberately NOT `panic = "abort"`. Capture and injection run on their own
-# threads; a panic there should lose the operation, not the user's session.
-

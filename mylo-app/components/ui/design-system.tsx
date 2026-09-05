@@ -3,7 +3,7 @@ import React from 'react'
 export function RoughCircle({ className = '' }: { className?: string }) {
   return (
     <svg className={`pointer-events-none absolute inset-0 h-full w-full ${className}`} viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-      <path d="M5 49 C5 18 25 5 53 7 C83 4 97 22 95 52 C98 81 77 96 48 94 C17 97 2 79 5 49Z" fill="none" stroke="currentColor" strokeWidth="1.4" strokeDasharray="5 2 12 3" strokeLinecap="round" />
+      <path d="M5 49 C5 18 25 5 53 7 C83 4 97 22 95 52 C98 81 77 96 48 94 C17 97 2 79 5 49Z" fill="none" stroke="currentColor" strokeWidth="1.4" strokeDasharray="5 2 12 3" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
     </svg>
   )
 }

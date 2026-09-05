@@ -50,6 +50,12 @@ pub struct DoAction {
     pub x: Option<i32>,
     /// Global desktop Y in physical pixels.
     pub y: Option<i32>,
+    /// Ratio of X coordinate within the cropped image (0.0 to 1.0)
+    #[serde(rename = "ratioX")]
+    pub ratio_x: Option<f64>,
+    /// Ratio of Y coordinate within the cropped image (0.0 to 1.0)
+    #[serde(rename = "ratioY")]
+    pub ratio_y: Option<f64>,
     /// Text to type, for `type`.
     pub text: Option<String>,
     /// Scroll distance in notches. Positive scrolls down.
