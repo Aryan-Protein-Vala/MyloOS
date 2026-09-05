@@ -41,6 +41,20 @@ impl DesktopBounds {
 }
 
 /// A single action proposed by the model and approved by the user.
+/// # Wire format
+///
+/// `rename_all = "camelCase"` governs **three** boundaries at once, and all
+/// three must agree:
+///
+/// 1. the JSON the model is asked to emit (the system prompt in `ipc.rs`),
+/// 2. the JSON Tauri hands to the webview, and
+/// 3. the `DoAction` interface in `lib/ai-client.ts`.
+///
+/// `actionType` and `description` are non-`Option`, so any disagreement on
+/// those two is a hard deserialisation failure rather than a missing value.
+/// `serde_field_names_match_the_prompt` in the test module below pins the
+/// emitted names so a rename here fails the build instead of silently
+/// breaking Do Mode at runtime.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct DoAction {
@@ -50,11 +64,14 @@ pub struct DoAction {
     pub x: Option<i32>,
     /// Global desktop Y in physical pixels.
     pub y: Option<i32>,
-    /// Ratio of X coordinate within the cropped image (0.0 to 1.0)
-    #[serde(rename = "ratioX")]
+    /// Ratio of the X coordinate within the cropped image, in `[0, 1]`.
+    ///
+    /// No explicit `#[serde(rename)]`: `rename_all = "camelCase"` above already
+    /// maps this to `ratioX`. Spelling it out on only two fields used to imply
+    /// the rest were untouched, which is how the model prompt ended up asking
+    /// for `action_type` while serde required `actionType`.
     pub ratio_x: Option<f64>,
-    /// Ratio of Y coordinate within the cropped image (0.0 to 1.0)
-    #[serde(rename = "ratioY")]
+    /// Ratio of the Y coordinate within the cropped image, in `[0, 1]`.
     pub ratio_y: Option<f64>,
     /// Text to type, for `type`.
     pub text: Option<String>,
@@ -298,5 +315,100 @@ mod tests {
         assert!(BOUNDS.contains(0, 0));
         assert!(!BOUNDS.contains(1920, 0));
         assert!(!BOUNDS.contains(0, 1080));
+    }
+}
+
+#[cfg(test)]
+mod wire_format_tests {
+    use super::*;
+
+    /// The model reply that the system prompt in `ipc.rs` asks for, verbatim.
+    ///
+    /// This is the actual regression: the prompt used to request `action_type`
+    /// and `scroll_amount` while `rename_all = "camelCase"` made serde require
+    /// `actionType` and `scrollAmount`. Because `action_type` is not an
+    /// `Option`, every single model reply failed to deserialise and Do Mode
+    /// reported "couldn't determine a safe action" 100% of the time — with no
+    /// error anywhere, because the parse result was discarded by `if let Ok`.
+    const PROMPT_SHAPED_REPLY: &str = r#"{
+        "actionType": "click",
+        "ratioX": 0.5,
+        "ratioY": 0.25,
+        "text": null,
+        "scrollAmount": null,
+        "description": "Click the Save button"
+    }"#;
+
+    #[test]
+    fn deserialises_a_reply_shaped_like_the_prompt() {
+        let action: DoAction = serde_json::from_str(PROMPT_SHAPED_REPLY)
+            .expect("the prompt's JSON shape must deserialise into DoAction");
+        assert_eq!(action.action_type, "click");
+        assert_eq!(action.ratio_x, Some(0.5));
+        assert_eq!(action.ratio_y, Some(0.25));
+        assert_eq!(action.description, "Click the Save button");
+    }
+
+    /// The model's refusal path has to parse too, otherwise a polite decline
+    /// is indistinguishable from a provider outage.
+    #[test]
+    fn deserialises_the_decline_reply() {
+        let json = r#"{"actionType":"none","description":"Cannot determine safe action"}"#;
+        let action: DoAction =
+            serde_json::from_str(json).expect("the decline shape must deserialise");
+        assert_eq!(action.action_type, "none");
+    }
+
+    /// Pins the serialised field names. Renaming a field, or dropping
+    /// `rename_all`, fails here rather than at runtime in front of a user.
+    ///
+    /// These names are load-bearing in three places at once: the system prompt
+    /// in `ipc.rs`, the `DoAction` interface in `lib/ai-client.ts`, and the
+    /// approval gate that renders `pendingAction.actionType`.
+    #[test]
+    fn serde_field_names_match_the_prompt() {
+        let action = DoAction {
+            action_type: "scroll".into(),
+            x: Some(10),
+            y: Some(20),
+            ratio_x: Some(0.1),
+            ratio_y: Some(0.2),
+            text: None,
+            scroll_amount: Some(-3),
+            description: "Scroll up".into(),
+        };
+
+        let value = serde_json::to_value(&action).expect("DoAction must serialise");
+        let object = value.as_object().expect("DoAction serialises to an object");
+
+        let mut keys: Vec<&str> = object.keys().map(String::as_str).collect();
+        keys.sort_unstable();
+
+        assert_eq!(
+            keys,
+            vec![
+                "actionType",
+                "description",
+                "ratioX",
+                "ratioY",
+                "scrollAmount",
+                "text",
+                "x",
+                "y",
+            ],
+            "DoAction's wire field names changed; update the system prompt in \
+             ipc.rs and the DoAction interface in lib/ai-client.ts to match"
+        );
+    }
+
+    /// Snake_case must *not* silently parse. If someone reintroduces the old
+    /// prompt this test fails immediately instead of shipping.
+    #[test]
+    fn rejects_snake_case_replies() {
+        let json = r#"{"action_type":"click","description":"x"}"#;
+        assert!(
+            serde_json::from_str::<DoAction>(json).is_err(),
+            "snake_case must be rejected, so prompt drift cannot pass silently"
+        );
     }
 }

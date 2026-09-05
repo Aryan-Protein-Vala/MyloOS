@@ -1,13 +1,34 @@
 import { invoke } from '@tauri-apps/api/core'
 
+/**
+ * Mirror of `DoAction` in `src-tauri/src/input_injector.rs`.
+ *
+ * The Rust struct is `#[serde(rename_all = "camelCase")]`, so these names must
+ * be camelCase. They are hand-written rather than generated, which means
+ * `tsc` cannot catch drift here: `invoke<DoAction>()` asserts a shape rather
+ * than verifying one. This interface previously declared `action_type`, so
+ * the approval gate rendered `undefined` for the action type on the one
+ * screen whose job is telling the user what is about to happen.
+ *
+ * If you change a field name, change it in all three places: this interface,
+ * the Rust struct, and the system prompt in `src-tauri/src/ipc.rs`. The Rust
+ * test `serde_field_names_match_the_prompt` pins the names.
+ */
 export interface DoAction {
-  action_type: 'click' | 'move' | 'type' | 'scroll'
+  /** Matches the arms accepted by `input_injector::validate`. */
+  actionType: 'click' | 'doubleClick' | 'rightClick' | 'move' | 'type' | 'scroll'
+  /** Global desktop X in physical pixels. Resolved in Rust from `ratioX`. */
   x?: number
+  /** Global desktop Y in physical pixels. Resolved in Rust from `ratioY`. */
   y?: number
+  /** Ratio within the captured crop, in [0, 1]. Informational on this side. */
   ratioX?: number
+  /** Ratio within the captured crop, in [0, 1]. Informational on this side. */
   ratioY?: number
   text?: string
-  scroll_amount?: number
+  /** Scroll notches. Positive scrolls down. Deliberately not reusing `y`. */
+  scrollAmount?: number
+  /** Human-readable summary shown in the approval gate. */
   description: string
 }
 

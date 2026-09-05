@@ -652,7 +652,20 @@ pub async fn analyze_for_do_mode(
         return Ok(None);
     }
 
-    let system_prompt = "You are MYLO, an AI that controls a user's computer via approved actions.\nAnalyze the screenshot and the user's intent. Return ONLY a JSON object with this exact shape:\n{\n  \"action_type\": \"click\" | \"move\" | \"type\" | \"scroll\",\n  \"ratioX\": <float between 0.0 and 1.0 for the X coordinate in the image, or null>,\n  \"ratioY\": <float between 0.0 and 1.0 for the Y coordinate in the image, or null>,\n  \"text\": <string to type, or null>,\n  \"scroll_amount\": <integer notches, or null>,\n  \"description\": \"<one sentence: what this action will do>\"\n}\nIf you cannot safely determine an action, return: {\"action_type\":\"none\",\"description\":\"Cannot determine safe action\"}";
+    // The key names below are NOT cosmetic: they are the exact field names
+    // `DoAction` deserialises, and `DoAction` is `#[serde(rename_all =
+    // "camelCase")]`. `actionType` and `description` are non-Option fields, so
+    // a snake_case reply makes `serde_json::from_str` fail outright and Do Mode
+    // silently reports "couldn't determine a safe action" for every request.
+    // If you rename a field on `DoAction`, rename it here too — the round-trip
+    // test at the bottom of input_injector.rs exists to catch the drift.
+    //
+    // Coordinates are requested as ratios in [0,1] relative to the cropped
+    // image, never as pixels: the model only ever sees the crop, so it cannot
+    // know the crop's offset on the desktop or how far it was downscaled before
+    // being sent. The caller converts the ratios back to global physical pixels
+    // using the rect that `capture_screen_crop` actually captured.
+    let system_prompt = "You are MYLO, an AI that controls a user's computer via approved actions.\nAnalyze the screenshot and the user's intent. Return ONLY a JSON object with this exact shape:\n{\n  \"actionType\": \"click\" | \"doubleClick\" | \"rightClick\" | \"move\" | \"type\" | \"scroll\",\n  \"ratioX\": <float between 0.0 and 1.0 for the X coordinate in the image, or null>,\n  \"ratioY\": <float between 0.0 and 1.0 for the Y coordinate in the image, or null>,\n  \"text\": <string to type, or null>,\n  \"scrollAmount\": <integer notches, positive scrolls down, or null>,\n  \"description\": \"<one sentence: what this action will do>\"\n}\nIf you cannot safely determine an action, return: {\"actionType\":\"none\",\"description\":\"Cannot determine safe action\"}";
 
     let client = reqwest::Client::new();
 
@@ -687,7 +700,20 @@ pub async fn analyze_for_do_mode(
     }
 
     if let Some(mut action) = raw_action {
-        // Convert ratios back into global physical desktop coordinates!
+        // "none" is the model declining, not an action. Report it as "no action
+        // available" so the UI shows its friendly message; letting it through
+        // would surface `validate`'s "Unknown action type 'none'" in the
+        // approval gate, which reads like a crash rather than a refusal.
+        if action.action_type == "none" {
+            log::info!("[MYLO do] Model declined: {}", action.description);
+            return Ok(None);
+        }
+
+        // Ratios are relative to the *cropped, possibly downscaled* image the
+        // model saw, so they are resolved against `rect` — the region
+        // `capture_screen_crop` actually captured, in global physical pixels.
+        // Because they are ratios, the downscale factor cancels out and does
+        // not need to be tracked separately.
         if let Some(rx) = action.ratio_x {
             action.x = Some(rect.x + (rx * rect.width as f64).round() as i32);
         }
