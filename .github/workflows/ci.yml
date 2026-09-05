@@ -1,0 +1,134 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # The desktop app's web layer. Type errors are build errors again, so this
+  # job is what stops a renamed IPC field from shipping silently.
+  # ---------------------------------------------------------------------------
+  app-web:
+    name: Desktop app (web layer)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mylo-app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mylo-app/package-lock.json
+      - run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Static export
+        run: npm run build
+      - name: Assert both entry points were emitted
+        run: |
+          test -f out/index.html          || { echo "::error::missing out/index.html"; exit 1; }
+          test -f out/overlay/index.html  || { echo "::error::missing out/overlay/index.html"; exit 1; }
+      - name: Assert the overlay ships no opaque background
+        # The dashboard and the overlay must not share a CSS chunk. If they do,
+        # the dashboard's opaque `html` background leaks into the transparent
+        # overlay window and blacks out the user's screen.
+        run: |
+          overlay_css=$(grep -o '/_next/static/chunks/[A-Za-z0-9._-]*\.css' out/overlay/index.html | sort -u)
+          test -n "$overlay_css" || { echo "::error::overlay loaded no stylesheet"; exit 1; }
+          for href in $overlay_css; do
+            file="out${href}"
+            if grep -qi 'faf8f5\|background:var(--background)' "$file"; then
+              echo "::error::$file gives the overlay an opaque background"
+              exit 1
+            fi
+          done
+          echo "overlay stylesheets are transparent: $overlay_css"
+
+  # ---------------------------------------------------------------------------
+  # The Rust core, on the two platforms it actually targets. `windows-capture`
+  # only builds for Windows and the ScreenCaptureKit path only for macOS, so
+  # neither half can be validated on a single runner.
+  # ---------------------------------------------------------------------------
+  app-rust:
+    name: Desktop app (Rust, ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Linux system deps
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mylo-app/package-lock.json
+
+      # tauri-build reads `frontendDist: ../out` at compile time and fails if
+      # the directory is missing, so the static export has to exist before
+      # cargo is allowed anywhere near this crate.
+      - name: Build the frontend tauri-build expects
+        working-directory: mylo-app
+        run: |
+          npm ci
+          npm run build
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: mylo-app/src-tauri
+
+      - name: Formatting
+        working-directory: mylo-app/src-tauri
+        # Advisory: a formatting nit should not hide a real compile error
+        # further down the job.
+        continue-on-error: true
+        run: cargo fmt --all --check
+
+      - name: Clippy
+        working-directory: mylo-app/src-tauri
+        run: cargo clippy --all-targets
+
+      - name: Tests
+        working-directory: mylo-app/src-tauri
+        run: cargo test --all
+
+  # ---------------------------------------------------------------------------
+  # The marketing site. It is deployed straight from this repo, so a broken
+  # build here is a broken production site.
+  # ---------------------------------------------------------------------------
+  site:
+    name: Marketing site
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mylo frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: pnpm install --no-frozen-lockfile
+      - run: pnpm exec tsc --noEmit
+      - run: pnpm run build

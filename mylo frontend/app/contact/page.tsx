@@ -1,9 +1,19 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import { ArrowRight, GitBranch, ArrowUpRight } from 'lucide-react'
+import { SITE_URL } from '@/lib/site-status'
 import Link from 'next/link'
+import { PlatformStatus } from '@/components/platform-status'
 
 export default function ContactPage() {
+  // Resolved after mount so it works on localhost, preview deploys, and prod
+  // alike. Falls back to the canonical host for the pre-hydration render.
+  const [redirectTo, setRedirectTo] = useState(`${SITE_URL}/contact/success`)
+  useEffect(() => {
+    setRedirectTo(`${window.location.origin}/contact/success`)
+  }, [])
+
   return (
     <main className="min-h-screen pb-20">
       <nav className="nav shell mb-12">
@@ -26,8 +36,11 @@ export default function ContactPage() {
           method="POST" 
           className="bg-white border-2 border-[var(--ink)] shadow-[6px_6px_0_var(--ink)] rounded-xl p-8 space-y-6 mt-8"
         >
-          {/* FormSubmit Configuration */}
-          <input type="hidden" name="_next" value="https://mylo-frontend.vercel.app/contact/success" />
+          {/* FormSubmit configuration. `_next` must be absolute, but hardcoding
+              the production host meant every submission from a preview
+              deployment or from localhost redirected onto the live site, so it
+              is derived from wherever the page is actually being served. */}
+          <input type="hidden" name="_next" value={redirectTo} />
           <input type="hidden" name="_subject" value="New MYLO Contact Form Submission!" />
           <input type="hidden" name="_captcha" value="false" />
 
@@ -84,10 +97,7 @@ export default function ContactPage() {
           <Link href="/privacy">Privacy Policy</Link>
           <Link href="/terms">Terms</Link>
         </div>
-        <div className="platforms">
-          <span><i className="live"/> Windows: LIVE</span>
-          <span><i/> macOS: IN PROGRESS</span>
-        </div>
+        <PlatformStatus/>
         <p className="copyright">© 2026 MYLO. Made for curious humans.</p>
       </footer>
     </main>

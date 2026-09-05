@@ -5,24 +5,21 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start",
     "lint": "eslint",
-    "tauri": "tauri"
+    "typecheck": "tsc --noEmit",
+    "tauri": "tauri",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
     "@tauri-apps/api": "^2.11.1",
-    "@tauri-apps/plugin-global-shortcut": "^2.3.2",
-    "@tauri-apps/plugin-store": "^2.4.4",
-    "@tauri-apps/plugin-stronghold": "^2.3.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "framer-motion": "^13.1.1",
     "lucide-react": "^1.38.0",
     "next": "16.3.3",
     "react": "19.2.8",
     "react-dom": "19.2.8",
-    "roughjs": "^4.6.6",
     "shadcn": "^4.19.1",
     "tailwind-merge": "^3.6.0",
     "tw-animate-css": "^1.4.0"
@@ -37,5 +34,7 @@
     "eslint-config-next": "16.3.3",
     "tailwindcss": "^4",
     "typescript": "^5"
-  }
+  },
+  "description": "MYLO desktop app \u2014 Next.js frontend for the Tauri shell.",
+  "license": "MIT"
 }

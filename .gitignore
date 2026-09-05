@@ -1,0 +1,39 @@
+# ---- OS ----
+.DS_Store
+Thumbs.db
+
+# ---- Node ----
+node_modules/
+.pnpm-store/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# ---- Next.js ----
+.next/
+out/
+*.tsbuildinfo
+next-env.d.ts
+
+# ---- Rust / Tauri ----
+target/
+mylo-app/src-tauri/gen/
+mylo-app/src-tauri/WixTools/
+mylo-app/src-tauri/*.log
+
+# ---- Secrets & env ----
+.env
+.env.*
+!.env.example
+*.pem
+*.p12
+*.keystore
+tauri.key
+tauri.key.pub
+
+# ---- Editors / tooling ----
+.vercel/
+.idea/
+.vscode/*
+!.vscode/extensions.json

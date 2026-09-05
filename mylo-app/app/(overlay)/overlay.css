@@ -1,0 +1,341 @@
+/*
+ * Overlay-only stylesheet.
+ *
+ * The overlay MUST NOT import globals.css. That file sets an opaque
+ * `background` on `html`, and the root element is what paints a window's
+ * canvas — so a transparent Tauri window whose document root has a background
+ * renders as a solid sheet no matter what `body` says. Overriding `body`
+ * alone does not help.
+ *
+ * Both `html` and `body` are forced transparent here, and this file is loaded
+ * by app/overlay/layout.tsx instead of the dashboard's stylesheet.
+ */
+
+html,
+body {
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  /* The window is click-through at the OS level; this stops the webview from
+     showing a text cursor or selecting content when it is not. */
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+:root {
+  --ink: #1e1e1e;
+  --paper: #fffef0;
+  --blue: #3b82f6;
+  --red: #ef4444;
+  --yellow: #fef08a;
+  --green: #16a34a;
+  --font-mono: "Courier New", Courier, monospace;
+  --font-sans: "Trebuchet MS", Arial, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+/* ── Layout ─────────────────────────────────────────────────────────────── */
+
+.overlay-root {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  z-index: 9999;
+  font-family: var(--font-sans);
+  color: var(--ink);
+}
+
+.overlay-root.is-drawable {
+  cursor: crosshair;
+}
+
+/* Children opt in to receiving pointer events; the canvas itself never
+   intercepts them, so a click on empty space still reaches the OS when the
+   window is click-through. */
+.pointer-none {
+  pointer-events: none;
+}
+.pointer-auto {
+  pointer-events: auto;
+}
+
+/* ── HUD chrome ─────────────────────────────────────────────────────────── */
+
+.hud {
+  position: fixed;
+  z-index: 10000;
+  font-family: var(--font-mono);
+  pointer-events: none;
+}
+
+.hud-top-left {
+  top: 16px;
+  left: 16px;
+}
+
+.hud-top-right {
+  top: 16px;
+  right: 16px;
+}
+
+.hud-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  background: var(--ink);
+}
+
+.hud-pill.safe {
+  color: var(--green);
+  box-shadow: 2px 2px 0 var(--green);
+}
+
+.hud-pill.unsafe {
+  color: var(--red);
+  box-shadow: 2px 2px 0 var(--red);
+}
+
+.hud-mode {
+  display: inline-block;
+  padding: 4px 12px;
+  font-size: 11px;
+  color: var(--paper);
+  background: var(--ink);
+  border: 1px solid var(--ink);
+}
+
+.hud-hint {
+  margin-top: 4px;
+  font-size: 9px;
+  opacity: 0.65;
+  color: var(--ink);
+  text-shadow: 0 0 3px rgba(255, 255, 255, 0.9);
+}
+
+/* ── Selection ──────────────────────────────────────────────────────────── */
+
+.selection {
+  position: absolute;
+  pointer-events: none;
+  border: 2px dashed var(--blue);
+  border-radius: 6px;
+  background: rgba(59, 130, 246, 0.08);
+}
+
+.selection.frozen {
+  border-color: var(--red);
+  border-style: solid;
+  background: transparent;
+}
+
+/* ── Cards ──────────────────────────────────────────────────────────────── */
+
+.speech,
+.task-card {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.45;
+  border: 2px solid var(--ink);
+  padding: 14px;
+}
+
+.speech {
+  position: relative;
+  background: #fff;
+  border-radius: 5px 13px 4px 10px;
+  box-shadow: 3px 3px 0 var(--red);
+}
+
+.speech b {
+  color: var(--blue);
+}
+
+.speech.error {
+  border-color: var(--red);
+}
+
+.task-card {
+  background: var(--paper);
+  border-radius: 4px 12px 4px 8px;
+  padding: 16px;
+  box-shadow: 4px 4px 0 var(--blue);
+}
+
+.card-anchor {
+  position: absolute;
+  bottom: 64px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10001;
+  width: 400px;
+  max-width: calc(100vw - 48px);
+}
+
+.card-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #6b7280;
+}
+
+.card-meta {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  opacity: 0.55;
+}
+
+.card-error {
+  margin-top: 10px;
+  font-size: 11px;
+  color: var(--red);
+}
+
+/* ── Controls ───────────────────────────────────────────────────────────── */
+
+.text-input {
+  width: 100%;
+  padding: 10px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  background: #fff;
+  border: 2px solid var(--ink);
+}
+
+.text-input:focus {
+  outline: 3px solid var(--blue);
+  outline-offset: 1px;
+}
+
+.text-input::placeholder {
+  opacity: 0.45;
+}
+
+.button-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 12px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  border: 2px solid var(--ink);
+  box-shadow: 2px 2px 0 var(--ink);
+  background: var(--paper);
+  transition: transform 0.12s ease, background 0.12s ease;
+}
+
+.btn:hover:not(:disabled) {
+  transform: translate(-1px, -1px);
+  box-shadow: 3px 3px 0 var(--ink);
+}
+
+.btn:active:not(:disabled) {
+  transform: translate(1px, 1px);
+  box-shadow: 1px 1px 0 var(--ink);
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  flex: 1;
+  color: #fff;
+  background: var(--blue);
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: #fee2e2;
+}
+
+.link-button {
+  margin-top: 10px;
+  font-size: 11px;
+  text-decoration: underline;
+  background: none;
+  border: none;
+  padding: 0;
+  color: #6b7280;
+}
+
+.link-button:hover {
+  color: var(--ink);
+}
+
+/* ── Loading dots ───────────────────────────────────────────────────────── */
+
+.dots {
+  display: inline-flex;
+  gap: 5px;
+  margin-top: 8px;
+}
+
+.dots span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--blue);
+  animation: dot-bounce 1.1s infinite ease-in-out;
+}
+
+.dots span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.dots span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes dot-bounce {
+  0%,
+  70%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.5;
+  }
+  35% {
+    transform: translateY(-6px);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dots span,
+  .btn {
+    animation: none !important;
+    transition: none !important;
+  }
+}

@@ -1,11 +1,12 @@
 {
-  "name": "my-project",
+  "name": "mylo-site",
   "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",
@@ -28,5 +29,7 @@
     "postcss": "^8.5",
     "tailwindcss": "^4.3.3",
     "typescript": "5.7.3"
-  }
+  },
+  "description": "Marketing site for MYLO, the ambient screen-aware AI desktop agent.",
+  "license": "MIT"
 }

@@ -2,6 +2,7 @@
 
 import { ArrowRight, GitBranch, ArrowUpRight } from 'lucide-react'
 import Link from 'next/link'
+import { PlatformStatus } from '@/components/platform-status'
 
 export default function TermsPage() {
   return (
@@ -65,8 +66,30 @@ export default function TermsPage() {
             To the maximum extent permitted by law, MYLO and its creators shall not be liable for any indirect, incidental, special, consequential, or punitive damages resulting from your use of or inability to use the service. This includes, without limitation, any damages arising from misuse of MYLO&apos;s overlay, stealth, or automation features.
           </p>
 
+          <h2 className="text-2xl font-bold text-[#1e1e1e] mt-10">7. Pricing and Paid Plans</h2>
+          <p>
+            MYLO is currently free and pre-release. Any paid or &quot;Pro&quot; tier described on this
+            site is <strong>planned, not available</strong>: there is no billing, no subscription, and
+            no way to pay us. If and when a paid plan launches, it will come with its own subscription
+            and refund terms, and nothing here should be read as an offer to sell.
+          </p>
+
+          <h2 className="text-2xl font-bold text-[#1e1e1e] mt-10">8. Governing Law</h2>
+          <p>
+            These Terms are governed by the laws of India, without regard to conflict-of-law rules.
+            The courts of Gurugram, Haryana, India have exclusive jurisdiction over any dispute
+            arising from them, except where mandatory consumer-protection law in your country of
+            residence grants you the right to bring proceedings locally.
+          </p>
+
+          <h2 className="text-2xl font-bold text-[#1e1e1e] mt-10">9. Changes to These Terms</h2>
+          <p>
+            We may update these Terms as MYLO changes. The current version always lives at this URL
+            with its revision date below. Continuing to use MYLO after a change means you accept it.
+          </p>
+
           <p className="mt-8">
-            Last updated: August 2026<br/>
+            MYLO&apos;s source code is released under the MIT Licence, which governs your rights to use, copy, modify and distribute the software itself. Where these Terms and the MIT Licence disagree about the software, the MIT Licence prevails; these Terms cover this website and any hosted services.<br/><br/>Last updated: September 2026<br/>
             Contact: <a href="mailto:aryansharma24112003@gmail.com" className="text-[var(--blue)] underline">aryansharma24112003@gmail.com</a>
           </p>
         </div>
@@ -89,10 +112,7 @@ export default function TermsPage() {
           <a href="/privacy">Privacy Policy</a>
           <a href="/terms">Terms</a>
         </div>
-        <div className="platforms">
-          <span><i className="live"/> Windows: LIVE</span>
-          <span><i/> macOS: IN PROGRESS</span>
-        </div>
+        <PlatformStatus/>
         <p className="copyright">© 2026 MYLO. Made for curious humans.</p>
       </footer>
     </main>

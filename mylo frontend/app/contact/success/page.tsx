@@ -2,6 +2,7 @@
 
 import { ArrowRight, GitBranch, ArrowUpRight, CheckCircle2 } from 'lucide-react'
 import Link from 'next/link'
+import { PlatformStatus } from '@/components/platform-status'
 
 export default function ContactSuccessPage() {
   return (
@@ -42,10 +43,7 @@ export default function ContactSuccessPage() {
           <Link href="/privacy">Privacy Policy</Link>
           <Link href="/terms">Terms</Link>
         </div>
-        <div className="platforms">
-          <span><i className="live"/> Windows: LIVE</span>
-          <span><i/> macOS: IN PROGRESS</span>
-        </div>
+        <PlatformStatus/>
         <p className="copyright">© 2026 MYLO. Made for curious humans.</p>
       </footer>
     </main>
