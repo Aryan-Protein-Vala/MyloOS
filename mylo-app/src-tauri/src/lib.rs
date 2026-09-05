@@ -6,6 +6,7 @@ pub mod storage;
 pub mod screen_capture;
 pub mod input_injector;
 pub mod platform_macos;
+pub mod state;
 
 use tauri::{Manager, menu::{MenuBuilder, MenuItemBuilder}, tray::TrayIconBuilder};
 
@@ -20,6 +21,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .manage(state::AppState::default())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_log::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
@@ -28,6 +30,13 @@ pub fn run() {
             ipc::get_api_key,
             ipc::set_active_provider,
             ipc::get_active_provider,
+            ipc::delete_api_key,
+            ipc::list_saved_providers,
+            ipc::get_shortcuts,
+            ipc::get_platform,
+            ipc::set_overlay_mode,
+            ipc::approve_do_action,
+            ipc::cancel_do_action,
             ipc::capture_screen_crop,
             ipc::set_overlay_interactive,
             ipc::verify_stream_safety,

@@ -213,12 +213,11 @@ export default function OverlayPage() {
   const runAskCapture = async (sel: Selection) => {
     setAskProcessing(true)
     try {
-      const base64Img: string | null = await invoke('capture_screen_crop', {
-        x: Math.round(sel.x),
-        y: Math.round(sel.y),
-        width: Math.round(sel.w),
-        height: Math.round(sel.h),
-        scaleFactor: window.devicePixelRatio || 1.0,
+      const { image: base64Img, rect } = await invoke<{ image: string | null; rect: { x: number; y: number; width: number; height: number } }>('capture_screen_crop', {
+        x: sel.x,
+        y: sel.y,
+        width: sel.w,
+        height: sel.h,
       })
 
       if (base64Img) {
@@ -242,12 +241,11 @@ export default function OverlayPage() {
     setDoPhase('analyzing')
 
     try {
-      const base64Img: string | null = await invoke('capture_screen_crop', {
-        x: Math.round(doSelection.x),
-        y: Math.round(doSelection.y),
-        width: Math.round(doSelection.w),
-        height: Math.round(doSelection.h),
-        scaleFactor: window.devicePixelRatio || 1.0,
+      const { image: base64Img, rect } = await invoke<{ image: string | null; rect: { x: number; y: number; width: number; height: number } }>('capture_screen_crop', {
+        x: doSelection.x,
+        y: doSelection.y,
+        width: doSelection.w,
+        height: doSelection.h,
       })
 
       if (!base64Img) {
@@ -256,7 +254,7 @@ export default function OverlayPage() {
         return
       }
 
-      const action = await analyzeForDoMode(base64Img, userIntent)
+      const action = await analyzeForDoMode(base64Img, userIntent, rect)
 
       if (!action) {
         setDoError("MYLO couldn't determine a safe action. Try again with a more specific intent.")
@@ -264,17 +262,14 @@ export default function OverlayPage() {
         return
       }
 
-      const dpr = window.devicePixelRatio || 1.0
-      if (action.action_type !== 'scroll') {
-        if (action.x != null) action.x = Math.round(doSelection.x + (action.x / dpr))
-        if (action.y != null) action.y = Math.round(doSelection.y + (action.y / dpr))
-      }
+      // The backend compute physical pixels using ratioX/ratioY based on rect.
+      // No frontend dpr arithmetic needed!
 
       setPendingAction(action)
       setDoPhase('approve')
     } catch (err) {
       console.error(err)
-      setDoError('Error analyzing intent.')
+      setDoError('Error analyzing intent or approving action.')
       setDoPhase('idle')
     }
   }
@@ -284,6 +279,7 @@ export default function OverlayPage() {
     setDoPhase('executing')
     setDoError(null)
     try {
+      await invoke('approve_do_action', { action: pendingAction })
       // Must dismiss overlay first, otherwise Enigo clicks hit the overlay itself!
       await dismissOverlay()
       // Give window manager 150ms to hide overlay and restore focus to target app
@@ -295,7 +291,8 @@ export default function OverlayPage() {
     }
   }
 
-  const handleRejectAction = () => {
+  const handleRejectAction = async () => {
+    await invoke('cancel_do_action')
     setPendingAction(null)
     setDoError(null)
     setDoSelection(null)

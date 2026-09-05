@@ -4,7 +4,10 @@ export interface DoAction {
   action_type: 'click' | 'move' | 'type' | 'scroll'
   x?: number
   y?: number
+  ratioX?: number
+  ratioY?: number
   text?: string
+  scroll_amount?: number
   description: string
 }
 
@@ -31,9 +34,9 @@ export async function askAi(prompt: string, base64Image: string): Promise<string
  * Uses Gemini's native JSON mode to guarantee parseable output.
  * Returns null if the AI can't determine a safe action.
  */
-export async function analyzeForDoMode(base64Image: string, userIntent: string): Promise<DoAction | null> {
+export async function analyzeForDoMode(base64Image: string, userIntent: string, rect: { x: number, y: number, width: number, height: number }): Promise<DoAction | null> {
   try {
-    return await invoke<DoAction | null>('analyze_for_do_mode', { base64Image, userIntent })
+    return await invoke<DoAction | null>('analyze_for_do_mode', { base64Image, userIntent, rect })
   } catch (err) {
     console.error('Do mode AI error:', err)
     return null
