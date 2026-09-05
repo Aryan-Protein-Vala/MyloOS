@@ -60,13 +60,18 @@ export default function OverlayPage() {
 
   // ── Event listeners ────────────────────────────────────────────────────────
   useEffect(() => {
-    invoke<boolean>('verify_stream_safety').then(setIsStreamSafe).catch(console.error)
+    if (typeof window !== 'undefined' && (window as any).__TAURI_INTERNALS__) {
+      invoke<boolean>('verify_stream_safety').then(setIsStreamSafe).catch(console.error)
+    }
 
-    const unlisteners: (() => void)[] = []
+    let unlistenState: (() => void) | null = null
+    let unlistenTarget: (() => void) | null = null
 
     const setup = async () => {
+      if (typeof window === 'undefined' || !(window as any).__TAURI_INTERNALS__) return
+
       // Overlay state from hotkeys
-      const u1 = await listen<OverlayMode>('overlay-state-changed', (event) => {
+      unlistenState = await listen<OverlayMode>('overlay-state-changed', (event) => {
         const newMode = event.payload
         setMode(newMode)
 
@@ -92,13 +97,11 @@ export default function OverlayPage() {
           invoke<boolean>('verify_stream_safety').then(setIsStreamSafe).catch(console.error)
         }, 100)
       })
-      unlisteners.push(u1)
 
       // Coach mode target position updates
-      const u2 = await listen<{ x: number; y: number }>('target-pos-changed', (event) => {
+      unlistenTarget = await listen<{ x: number; y: number }>('target-pos-changed', (event) => {
         setTargetPos(event.payload)
       })
-      unlisteners.push(u2)
     }
 
     setup().catch(console.error)
@@ -116,7 +119,8 @@ export default function OverlayPage() {
     window.addEventListener('keydown', onKeyDown)
 
     return () => {
-      unlisteners.forEach((u) => u())
+      if (unlistenState) unlistenState()
+      if (unlistenTarget) unlistenTarget()
       window.removeEventListener('keydown', onKeyDown)
     }
   }, [dismissOverlay])
@@ -126,6 +130,7 @@ export default function OverlayPage() {
   const isAskDrawable = mode === 'ask' && !askSelection && !askProcessing
 
   const handlePointerDown = (e: React.PointerEvent) => {
+    e.currentTarget.setPointerCapture(e.pointerId)
     if (mode === 'ask' && isAskDrawable) {
       setIsDragging(true)
       setStartPos({ x: e.clientX, y: e.clientY })
@@ -314,11 +319,11 @@ export default function OverlayPage() {
       {mode === 'coach' && (
         <>
           <div className="absolute" style={{ left: targetPos.x - 100, top: targetPos.y - 100, width: 200, height: 200 }}>
-            <div className="absolute inset-0 border-4 border-dashed border-[var(--blue)] rounded-full animate-spin-slow opacity-50" />
+            <div className="absolute inset-0 border-4 border-dashed border-[var(--blue)] rounded-full opacity-50" />
             <RoughCircle className="text-[var(--red)] drop-shadow-md" />
           </div>
           <div className="absolute" style={{ left: targetPos.x + 80, top: targetPos.y - 80 }}>
-            <div className="speech animate-bounce-slight pointer-events-auto">
+            <div className="speech pointer-events-auto">
               <b>MYLO says:</b>
               <br />
               Click here to proceed.
@@ -536,6 +541,7 @@ export default function OverlayPage() {
           --green: #86efac;
           --paper: #fffef0;
         }
+        body { background: transparent !important; }
         .speech {
           position: relative; z-index: 7;
           padding: 12px; background: #fff;
@@ -554,13 +560,6 @@ export default function OverlayPage() {
           font-size: 12px;
           box-shadow: 4px 4px 0 var(--blue);
         }
-        @keyframes bounce-slight {
-          0%, 100% { transform: translateY(0); }
-          50%       { transform: translateY(-5px); }
-        }
-        .animate-bounce-slight { animation: bounce-slight 2s infinite ease-in-out; }
-        @keyframes spin-slow { to { transform: rotate(360deg); } }
-        .animate-spin-slow { animation: spin-slow 8s linear infinite; }
         input::placeholder { opacity: 0.5; }
       `
       }} />

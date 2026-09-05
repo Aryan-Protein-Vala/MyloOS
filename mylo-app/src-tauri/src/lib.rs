@@ -32,29 +32,28 @@ pub fn run() {
         ])
         .setup(|app| {
             // ── Overlay window: make it click-through, topmost, and stream-safe ──
-            let overlay_window = app.get_webview_window("overlay").unwrap();
+            if let Some(overlay_window) = app.get_webview_window("overlay") {
+                #[cfg(target_os = "windows")]
+                {
+                    let hwnd_raw = overlay_window.hwnd().unwrap().0 as isize;
+                    let hwnd = HWND(hwnd_raw as _);
 
-            #[cfg(target_os = "windows")]
-            {
-                let hwnd_raw = overlay_window.hwnd().unwrap().0 as isize;
-                let hwnd = HWND(hwnd_raw as _);
-
-                unsafe {
-                    let ex_style = GetWindowLongW(hwnd, GWL_EXSTYLE);
-                    SetWindowLongW(
-                        hwnd,
-                        GWL_EXSTYLE,
-                        ex_style
-                            | WS_EX_LAYERED.0 as i32
-                            | WS_EX_TRANSPARENT.0 as i32
-                            | WS_EX_TOPMOST.0 as i32,
-                    );
-                    let _ = SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE);
+                    unsafe {
+                        let ex_style = GetWindowLongW(hwnd, GWL_EXSTYLE);
+                        SetWindowLongW(
+                            hwnd,
+                            GWL_EXSTYLE,
+                            ex_style
+                                | WS_EX_LAYERED.0 as i32
+                                | WS_EX_TOPMOST.0 as i32,
+                        );
+                        let _ = SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE);
+                    }
                 }
-            }
 
-            #[cfg(target_os = "macos")]
-            crate::platform_macos::setup_overlay(&overlay_window);
+                #[cfg(target_os = "macos")]
+                crate::platform_macos::setup_overlay(&overlay_window);
+            }
 
             // ── Register global hotkeys AFTER setup so the window handle exists ──
             hotkey::register_hotkeys(app.handle());
@@ -62,9 +61,11 @@ pub fn run() {
             // ── System Tray ──
             let quit_item = MenuItemBuilder::with_id("quit", "Quit MYLO").build(app)?;
             let menu = MenuBuilder::new(app).items(&[&quit_item]).build()?;
-            let _tray = TrayIconBuilder::new()
-                .icon(app.default_window_icon().unwrap().clone())
-                .menu(&menu)
+            let mut tray_builder = TrayIconBuilder::new().menu(&menu);
+            if let Some(icon) = app.default_window_icon().cloned() {
+                tray_builder = tray_builder.icon(icon);
+            }
+            let _tray = tray_builder
                 .on_menu_event(move |app, event| {
                     if event.id == quit_item.id() {
                         app.exit(0);
@@ -82,6 +83,17 @@ pub fn run() {
 
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app_handle, event| match event {
+            tauri::RunEvent::WindowEvent { label, event: tauri::WindowEvent::CloseRequested { api, .. }, .. } => {
+                if label == "main" {
+                    api.prevent_close();
+                    if let Some(window) = app_handle.get_webview_window("main") {
+                        let _ = window.hide();
+                    }
+                }
+            }
+            _ => {}
+        });
 }

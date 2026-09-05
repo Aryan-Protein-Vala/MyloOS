@@ -14,49 +14,41 @@ pub fn toggle_overlay(app_handle: tauri::AppHandle, visible: bool, click_through
             let _ = overlay_window.hide();
         }
 
+        let _ = overlay_window.set_ignore_cursor_events(click_through);
+
         #[cfg(target_os = "windows")]
-        apply_window_styles(&overlay_window, click_through);
+        reassert_wda(&overlay_window);
 
         #[cfg(target_os = "macos")]
         crate::platform_macos::reassert_stream_safety(&overlay_window);
-        
-        let _ = click_through; // suppress warning on macOS
     }
 }
 
 #[command]
 pub fn set_overlay_interactive(app_handle: tauri::AppHandle, interactive: bool) {
     if let Some(overlay_window) = app_handle.get_webview_window("overlay") {
+        let _ = overlay_window.set_ignore_cursor_events(!interactive);
+
         #[cfg(target_os = "windows")]
-        apply_window_styles(&overlay_window, !interactive);
+        reassert_wda(&overlay_window);
 
         #[cfg(target_os = "macos")]
         crate::platform_macos::reassert_stream_safety(&overlay_window);
-        
-        let _ = interactive; // suppress warning on macOS if unused further
     }
 }
 
-/// Centralized Win32 style mutation.
-/// Always re-asserts WDA_EXCLUDEFROMCAPTURE after any ex_style change
-/// because some GPU drivers silently drop the affinity on style mutation.
+/// Centralized Win32 stream safety reassertion.
+/// Needed because some GPU drivers silently drop the affinity on style/click-through mutation.
 #[cfg(target_os = "windows")]
-fn apply_window_styles(window: &tauri::WebviewWindow, click_through: bool) {
+fn reassert_wda(window: &tauri::WebviewWindow) {
     use windows::Win32::Foundation::HWND;
     use windows::Win32::UI::WindowsAndMessaging::{
-        GetWindowLongW, SetWindowLongW, SetWindowDisplayAffinity,
-        GWL_EXSTYLE, WS_EX_TRANSPARENT, WDA_EXCLUDEFROMCAPTURE,
+        SetWindowDisplayAffinity, WDA_EXCLUDEFROMCAPTURE,
     };
 
     if let Ok(hwnd_ptr) = window.hwnd() {
         let hwnd = HWND(hwnd_ptr.0 as _);
         unsafe {
-            let ex_style = GetWindowLongW(hwnd, GWL_EXSTYLE);
-            if click_through {
-                SetWindowLongW(hwnd, GWL_EXSTYLE, ex_style | WS_EX_TRANSPARENT.0 as i32);
-            } else {
-                SetWindowLongW(hwnd, GWL_EXSTYLE, ex_style & !(WS_EX_TRANSPARENT.0 as i32));
-            }
             let _ = SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE);
         }
     }
@@ -98,7 +90,7 @@ pub async fn capture_screen_crop(
         return Ok(None);
     }
 
-    Ok(crate::screen_capture::capture_crop_async(phys_x, phys_y, phys_w, phys_h).await)
+    crate::screen_capture::capture_crop_async(phys_x, phys_y, phys_w, phys_h).await
 }
 
 // ─────────────────────────────────────────────────────────────

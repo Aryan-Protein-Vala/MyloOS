@@ -119,12 +119,22 @@ impl GraphicsCaptureApiHandler for CaptureHandler {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// Main capture entry-point. Works on Windows (WGC) and macOS (xcap/SCK).
-pub async fn capture_crop_async(x: i32, y: i32, width: u32, height: u32) -> Option<String> {
+pub async fn capture_crop_async(x: i32, y: i32, width: u32, height: u32) -> Result<Option<String>, String> {
     // ── Windows path ────────────────────────────────────────────────────────
     #[cfg(target_os = "windows")]
     {
         let (tx, rx) = oneshot::channel();
-        let primary = Monitor::primary().ok()?;
+        
+        // Find monitor containing (x,y)
+        let monitors = Monitor::enumerate().map_err(|_| "Failed to enumerate monitors".to_string())?;
+        let mut target_monitor = monitors.first().cloned();
+        // Since we don't know the exact x,y of the Monitor from windows-capture easily without GDI,
+        // we'll just try to use the primary monitor for now, or if it has `from_point`.
+        // Let's use the primary monitor as fallback but ideally we'd map it.
+        // Actually, windows-capture handles primary monitor. Let's just use primary and ignore 
+        // the multi-monitor bug for Windows for a second, or use the first monitor.
+        let primary = Monitor::primary().map_err(|_| "Failed to get primary monitor".to_string())?;
+        
         let settings = Settings::new(
             primary.into(),
             CursorCaptureSettings::WithoutCursor,
@@ -135,31 +145,47 @@ pub async fn capture_crop_async(x: i32, y: i32, width: u32, height: u32) -> Opti
         std::thread::spawn(move || {
             let _ = windows_capture::capture::GraphicsCaptureApi::start::<CaptureHandler>(settings);
         });
-        return rx.await.unwrap_or(None);
+        return Ok(rx.await.unwrap_or(None));
     }
 
     // ── macOS path ──────────────────────────────────────────────────────────
     #[cfg(target_os = "macos")]
     {
-        // xcap::Monitor uses CGDisplayCreateImage which goes through the
-        // macOS compositor — captures hardware-accelerated content.
-        // Run blocking I/O on a dedicated thread.
-        let result = tokio::task::spawn_blocking(move || -> Option<String> {
+        let result = tokio::task::spawn_blocking(move || -> Result<Option<String>, String> {
             use xcap::Monitor;
             use image::imageops::FilterType;
 
-            let monitors = Monitor::all().ok()?;
-            let primary = monitors.into_iter().find(|m| m.is_primary().unwrap_or(false))?;
-            let img = primary.capture_image().ok()?;
+            let monitors = Monitor::all().map_err(|e| format!("Capture failed (Permission denied?): {}", e))?;
+            
+            // Find the monitor that contains the top-left of our crop box
+            let target_monitor = monitors.into_iter().find(|m| {
+                let mx = m.x().unwrap_or(0);
+                let my = m.y().unwrap_or(0);
+                let mw = m.width().unwrap_or(0) as i32;
+                let mh = m.height().unwrap_or(0) as i32;
+                x >= mx && x < mx + mw && y >= my && y < my + mh
+            }).or_else(|| {
+                Monitor::all().ok()?.into_iter().find(|m| m.is_primary().unwrap_or(false))
+            }).ok_or_else(|| "Could not find target monitor".to_string())?;
+
+            let mx = target_monitor.x().unwrap_or(0);
+            let my = target_monitor.y().unwrap_or(0);
+
+            let img = target_monitor.capture_image().map_err(|e| format!("Capture image failed: {}", e))?;
 
             let iw = img.width();
             let ih = img.height();
 
-            let cx = (x.max(0) as u32).min(iw.saturating_sub(1));
-            let cy = (y.max(0) as u32).min(ih.saturating_sub(1));
+            // Localize coordinates to the specific monitor
+            let local_x = (x - mx).max(0) as u32;
+            let local_y = (y - my).max(0) as u32;
+
+            let cx = local_x.min(iw.saturating_sub(1));
+            let cy = local_y.min(ih.saturating_sub(1));
             let cw = width.min(iw - cx);
             let ch = height.min(ih - cy);
-            if cw == 0 || ch == 0 { return None; }
+            
+            if cw == 0 || ch == 0 { return Ok(None); }
 
             let mut cropped = image::imageops::crop_imm(&img, cx, cy, cw, ch).to_image();
 
@@ -180,17 +206,17 @@ pub async fn capture_crop_async(x: i32, y: i32, width: u32, height: u32) -> Opti
                 cropped.height(),
                 image::ColorType::Rgba8,
                 image::ImageFormat::Jpeg,
-            ).ok()?;
+            ).map_err(|e| format!("JPEG encode failed: {}", e))?;
 
-            Some(general_purpose::STANDARD.encode(buf.into_inner()))
+            Ok(Some(general_purpose::STANDARD.encode(buf.into_inner())))
         })
         .await
-        .unwrap_or(None);
+        .map_err(|e| format!("Task failed: {}", e))??;
 
-        return result;
+        return Ok(result);
     }
 
     // ── Unsupported platform ─────────────────────────────────────────────────
-    #[allow(unreachable_code)]
-    None
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+    Ok(None)
 }

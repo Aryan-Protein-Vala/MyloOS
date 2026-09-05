@@ -16,6 +16,10 @@ export default function AppDashboard() {
       setStatus({ type: 'error', msg: 'Please enter a key first.' })
       return
     }
+    if (!(window as any).__TAURI_INTERNALS__) {
+      setStatus({ type: 'error', msg: 'Not running in Tauri. Cannot save.' })
+      return
+    }
     setSaving(true)
     try {
       await invoke('save_api_key', { provider, key: apiKey })
@@ -105,10 +109,10 @@ export default function AppDashboard() {
           <div className="mode-text">
             <span className="eyebrow">SHORTCUTS</span>
             <h3>Quick Actions</h3>
-            <p>Use these global shortcuts from anywhere on your PC.</p>
+            <p>Use these global shortcuts from anywhere on your {navigator.userAgent.includes('Mac') ? 'Mac' : 'PC'}.</p>
             <ul className="mt-6">
-              <li><strong>Alt + Space</strong>: Toggle voice ask mode</li>
-              <li><strong>Alt + Shift + S</strong>: Summon ghost cursor / Do mode</li>
+              <li><strong>{navigator.userAgent.includes('Mac') ? 'Cmd' : 'Ctrl'} + Shift + Space</strong>: Toggle voice ask mode</li>
+              <li><strong>{navigator.userAgent.includes('Mac') ? 'Cmd' : 'Ctrl'} + Shift + D</strong>: Summon ghost cursor / Do mode</li>
               <li><strong>Esc (Double tap)</strong>: Hide all overlays</li>
             </ul>
 
