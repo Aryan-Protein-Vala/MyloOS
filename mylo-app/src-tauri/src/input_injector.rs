@@ -41,20 +41,6 @@ impl DesktopBounds {
 }
 
 /// A single action proposed by the model and approved by the user.
-/// # Wire format
-///
-/// `rename_all = "camelCase"` governs **three** boundaries at once, and all
-/// three must agree:
-///
-/// 1. the JSON the model is asked to emit (the system prompt in `ipc.rs`),
-/// 2. the JSON Tauri hands to the webview, and
-/// 3. the `DoAction` interface in `lib/ai-client.ts`.
-///
-/// `actionType` and `description` are non-`Option`, so any disagreement on
-/// those two is a hard deserialisation failure rather than a missing value.
-/// `serde_field_names_match_the_prompt` in the test module below pins the
-/// emitted names so a rename here fails the build instead of silently
-/// breaking Do Mode at runtime.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct DoAction {
@@ -64,14 +50,11 @@ pub struct DoAction {
     pub x: Option<i32>,
     /// Global desktop Y in physical pixels.
     pub y: Option<i32>,
-    /// Ratio of the X coordinate within the cropped image, in `[0, 1]`.
-    ///
-    /// No explicit `#[serde(rename)]`: `rename_all = "camelCase"` above already
-    /// maps this to `ratioX`. Spelling it out on only two fields used to imply
-    /// the rest were untouched, which is how the model prompt ended up asking
-    /// for `action_type` while serde required `actionType`.
+    /// Ratio of X coordinate within the cropped image (0.0 to 1.0)
+    #[serde(rename = "ratioX")]
     pub ratio_x: Option<f64>,
-    /// Ratio of the Y coordinate within the cropped image, in `[0, 1]`.
+    /// Ratio of Y coordinate within the cropped image (0.0 to 1.0)
+    #[serde(rename = "ratioY")]
     pub ratio_y: Option<f64>,
     /// Text to type, for `type`.
     pub text: Option<String>,
@@ -225,6 +208,8 @@ mod tests {
             action_type: kind.to_string(),
             x: Some(100),
             y: Some(100),
+            ratio_x: None,
+            ratio_y: None,
             text: None,
             scroll_amount: None,
             description: "test action".to_string(),

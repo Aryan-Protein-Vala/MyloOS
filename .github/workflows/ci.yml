@@ -33,10 +33,6 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
-      # NOTE: app/layout.tsx uses next/font/google, so this step downloads Geist
-      # from fonts.googleapis.com at build time. It works on GitHub runners but
-      # makes the build non-hermetic: it fails on an offline or air-gapped
-      # machine. Switching to next/font/local would remove the dependency.
       - name: Static export
         run: npm run build
 
@@ -161,12 +157,25 @@ jobs:
         working-directory: mylo frontend
     steps:
       - uses: actions/checkout@v4
+
+      # No `version:` here on purpose — pnpm/action-setup reads the
+      # `packageManager` field from the site's package.json, so CI and local
+      # development can never disagree about the pnpm major.
+      #
+      # This job failed on pnpm 9 with "packages field missing or empty":
+      # pnpm-workspace.yaml holds only `minimumReleaseAgeExclude`, which is a
+      # pnpm 10 setting, and pnpm 9 requires a `packages:` key in any
+      # pnpm-workspace.yaml it finds.
+      # There is no root package.json, so point the action at the site's.
       - uses: pnpm/action-setup@v4
         with:
-          version: 9
+          package_json_file: mylo frontend/package.json
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: pnpm
+          cache-dependency-path: mylo frontend/pnpm-lock.yaml
       - run: pnpm install --no-frozen-lockfile
       - run: pnpm exec tsc --noEmit
       - run: pnpm run build

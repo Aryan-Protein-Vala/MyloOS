@@ -31,5 +31,6 @@
     "typescript": "5.7.3"
   },
   "description": "Marketing site for MYLO, the ambient screen-aware AI desktop agent.",
-  "license": "MIT"
+  "license": "MIT",
+  "packageManager": "pnpm@10.34.5"
 }
