@@ -84,17 +84,27 @@ pub fn get_active_provider(app_handle: tauri::AppHandle) -> String {
 
 #[command]
 pub async fn capture_screen_crop(
-    x: i32,
-    y: i32,
-    width: u32,
-    height: u32,
-    scale_factor: f64,
+    app_handle: tauri::AppHandle,
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+    _scale_factor: f64, // Ignored, using native scale factor
 ) -> Result<Option<String>, String> {
-    if width == 0 || height == 0 {
+    if width == 0.0 || height == 0.0 {
         return Ok(None);
     }
-    // Pass coordinates and scale factor directly to support multi-monitor setups with negative offsets
-    crate::screen_capture::capture_crop_async(x, y, width, height, scale_factor).await
+    use tauri::Manager;
+    let window = app_handle.get_webview_window("overlay").ok_or("No overlay")?;
+    let scale = window.scale_factor().map_err(|e| e.to_string())?;
+    let origin = window.outer_position().map_err(|e| e.to_string())?;
+    
+    let physical_x = origin.x + (x * scale).round() as i32;
+    let physical_y = origin.y + (y * scale).round() as i32;
+    let physical_w = (width * scale).round().max(0.0) as u32;
+    let physical_h = (height * scale).round().max(0.0) as u32;
+
+    crate::screen_capture::capture_crop_async(physical_x, physical_y, physical_w, physical_h).await
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -143,7 +153,13 @@ pub fn verify_stream_safety(app_handle: tauri::AppHandle) -> bool {
 // ─────────────────────────────────────────────────────────────
 
 #[command]
-pub fn execute_do_action(action: crate::input_injector::DoAction) -> Result<(), String> {
+pub fn execute_do_action(app_handle: tauri::AppHandle, action: crate::input_injector::DoAction) -> Result<(), String> {
+    use tauri::Manager;
+    if let Some(window) = app_handle.get_webview_window("overlay") {
+        if window.is_visible().unwrap_or(false) {
+            return Err("Overlay is still visible; refusing to inject input that would hit it".to_string());
+        }
+    }
     crate::input_injector::execute_action(&action)
 }
 
