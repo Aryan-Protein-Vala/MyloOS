@@ -3,8 +3,9 @@ pub mod hotkey;
 pub mod storage;
 pub mod screen_capture;
 pub mod input_injector;
+pub mod platform_macos;
 
-use tauri::Manager;
+use tauri::{Manager, menu::{MenuBuilder, MenuItemBuilder}, tray::TrayIconBuilder};
 
 #[cfg(target_os = "windows")]
 use windows::Win32::Foundation::HWND;
@@ -31,7 +32,7 @@ pub fn run() {
         ])
         .setup(|app| {
             // ── Overlay window: make it click-through, topmost, and stream-safe ──
-            let _overlay_window = app.get_webview_window("overlay").unwrap();
+            let overlay_window = app.get_webview_window("overlay").unwrap();
 
             #[cfg(target_os = "windows")]
             {
@@ -52,8 +53,32 @@ pub fn run() {
                 }
             }
 
+            #[cfg(target_os = "macos")]
+            crate::platform_macos::setup_overlay(&overlay_window);
+
             // ── Register global hotkeys AFTER setup so the window handle exists ──
             hotkey::register_hotkeys(app.handle());
+
+            // ── System Tray ──
+            let quit_item = MenuItemBuilder::with_id("quit", "Quit MYLO").build(app)?;
+            let menu = MenuBuilder::new(app).items(&[&quit_item]).build()?;
+            let _tray = TrayIconBuilder::new()
+                .icon(app.default_window_icon().unwrap().clone())
+                .menu(&menu)
+                .on_menu_event(move |app, event| {
+                    if event.id == quit_item.id() {
+                        app.exit(0);
+                    }
+                })
+                .on_tray_icon_event(|tray, event| {
+                    if let tauri::tray::TrayIconEvent::Click { .. } = event {
+                        if let Some(main) = tray.app_handle().get_webview_window("main") {
+                            let _ = main.show();
+                            let _ = main.set_focus();
+                        }
+                    }
+                })
+                .build(app)?;
 
             Ok(())
         })

@@ -47,6 +47,10 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
+    "macOS": {
+      "frameworks": ["CoreGraphics", "CoreVideo", "AppKit"],
+      "infoPlist": "Info.plist"
+    },
     "android": {
       "debugApplicationIdSuffix": ".debug"
     }

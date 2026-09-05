@@ -6,7 +6,7 @@ use tauri::Manager;
 // ─────────────────────────────────────────────────────────────
 
 #[command]
-pub fn toggle_overlay(app_handle: tauri::AppHandle, visible: bool, _click_through: bool) {
+pub fn toggle_overlay(app_handle: tauri::AppHandle, visible: bool, click_through: bool) {
     if let Some(overlay_window) = app_handle.get_webview_window("overlay") {
         if visible {
             let _ = overlay_window.show();
@@ -16,14 +16,24 @@ pub fn toggle_overlay(app_handle: tauri::AppHandle, visible: bool, _click_throug
 
         #[cfg(target_os = "windows")]
         apply_window_styles(&overlay_window, click_through);
+
+        #[cfg(target_os = "macos")]
+        crate::platform_macos::reassert_stream_safety(&overlay_window);
+        
+        let _ = click_through; // suppress warning on macOS
     }
 }
 
 #[command]
-pub fn set_overlay_interactive(app_handle: tauri::AppHandle, _interactive: bool) {
-    if let Some(_overlay_window) = app_handle.get_webview_window("overlay") {
+pub fn set_overlay_interactive(app_handle: tauri::AppHandle, interactive: bool) {
+    if let Some(overlay_window) = app_handle.get_webview_window("overlay") {
         #[cfg(target_os = "windows")]
         apply_window_styles(&overlay_window, !interactive);
+
+        #[cfg(target_os = "macos")]
+        crate::platform_macos::reassert_stream_safety(&overlay_window);
+        
+        let _ = interactive; // suppress warning on macOS if unused further
     }
 }
 
