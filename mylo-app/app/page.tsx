@@ -8,25 +8,25 @@ import { invoke } from '@tauri-apps/api/core'
 export default function AppDashboard() {
   const [apiKey, setApiKey] = useState('')
   const [provider, setProvider] = useState<'gemini' | 'openai'>('gemini')
-  const [status, setStatus] = useState<string | null>(null)
+  const [status, setStatus] = useState<{ type: 'success' | 'error'; msg: string } | null>(null)
   const [saving, setSaving] = useState(false)
 
   const handleSaveKey = async () => {
     if (!apiKey.trim()) {
-      setStatus('Please enter a key first.')
-      setTimeout(() => setStatus(null), 2000)
+      setStatus({ type: 'error', msg: 'Please enter a key first.' })
       return
     }
     setSaving(true)
     try {
       await invoke('save_api_key', { provider, key: apiKey })
       setApiKey('')
-      setStatus('Key saved securely in local store.')
+      setStatus({ type: 'success', msg: 'Key saved to encrypted local store.' })
+      setTimeout(() => setStatus(null), 4000)
     } catch (e) {
-      setStatus(`Error saving key: ${e}`)
+      // Errors persist until the user clicks dismiss — don't auto-hide
+      setStatus({ type: 'error', msg: `Failed to save: ${e}` })
     } finally {
       setSaving(false)
-      setTimeout(() => setStatus(null), 3000)
     }
   }
 
@@ -53,7 +53,7 @@ export default function AppDashboard() {
           <div className="mode-text">
             <span className="eyebrow">BYOK SETUP</span>
             <h3>Bring Your Own Key</h3>
-            <p>Connect your preferred model. Your key is stored securely in your OS keychain and never leaves your device.</p>
+            <p>Connect your preferred model. Your key is stored in an encrypted local store that never leaves your device.</p>
             
             <div className="mt-8 flex flex-col gap-4">
               <div className="flex gap-4 mb-2">
@@ -86,8 +86,15 @@ export default function AppDashboard() {
               </button>
 
               {status && (
-                <div className="mt-4 flex items-center gap-2 text-[var(--green)] font-mono text-sm p-3 border-2 border-[var(--ink)] bg-[var(--paper)] shadow-[3px_3px_0_var(--ink)]">
-                  <ShieldCheck size={16} /> {status}
+                <div className={`mt-4 flex items-center justify-between gap-2 font-mono text-sm p-3 border-2 border-[var(--ink)] bg-[var(--paper)] shadow-[3px_3px_0_var(--ink)] ${
+                  status.type === 'error' ? 'text-red-600' : 'text-[var(--green)]'
+                }`}>
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck size={16} /> {status.msg}
+                  </div>
+                  {status.type === 'error' && (
+                    <button className="text-xs underline opacity-60 hover:opacity-100" onClick={() => setStatus(null)}>dismiss</button>
+                  )}
                 </div>
               )}
             </div>

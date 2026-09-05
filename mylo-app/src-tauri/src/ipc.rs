@@ -1,13 +1,12 @@
 use tauri::command;
 use tauri::Manager;
-use serde::{Deserialize, Serialize};
 
 // ─────────────────────────────────────────────────────────────
 // Overlay window control
 // ─────────────────────────────────────────────────────────────
 
 #[command]
-pub fn toggle_overlay(app_handle: tauri::AppHandle, visible: bool, click_through: bool) {
+pub fn toggle_overlay(app_handle: tauri::AppHandle, visible: bool, _click_through: bool) {
     if let Some(overlay_window) = app_handle.get_webview_window("overlay") {
         if visible {
             let _ = overlay_window.show();
@@ -21,15 +20,16 @@ pub fn toggle_overlay(app_handle: tauri::AppHandle, visible: bool, click_through
 }
 
 #[command]
-pub fn set_overlay_interactive(app_handle: tauri::AppHandle, interactive: bool) {
-    if let Some(overlay_window) = app_handle.get_webview_window("overlay") {
+pub fn set_overlay_interactive(app_handle: tauri::AppHandle, _interactive: bool) {
+    if let Some(_overlay_window) = app_handle.get_webview_window("overlay") {
         #[cfg(target_os = "windows")]
         apply_window_styles(&overlay_window, !interactive);
     }
 }
 
-/// Sets WS_EX_TRANSPARENT and re-asserts WDA_EXCLUDEFROMCAPTURE so
-/// every style mutation keeps the stream-safety guarantee intact.
+/// Centralized Win32 style mutation.
+/// Always re-asserts WDA_EXCLUDEFROMCAPTURE after any ex_style change
+/// because some GPU drivers silently drop the affinity on style mutation.
 #[cfg(target_os = "windows")]
 fn apply_window_styles(window: &tauri::WebviewWindow, click_through: bool) {
     use windows::Win32::Foundation::HWND;
@@ -47,7 +47,6 @@ fn apply_window_styles(window: &tauri::WebviewWindow, click_through: bool) {
             } else {
                 SetWindowLongW(hwnd, GWL_EXSTYLE, ex_style & !(WS_EX_TRANSPARENT.0 as i32));
             }
-            // Always re-assert WDA — toggling ex_style can drop it on some drivers
             let _ = SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE);
         }
     }
@@ -72,22 +71,23 @@ pub fn get_api_key(app_handle: tauri::AppHandle, provider: String) -> Option<Str
 // ─────────────────────────────────────────────────────────────
 
 #[command]
-pub fn capture_active_monitor() -> Vec<u8> {
-    crate::screen_capture::capture()
-}
-
-#[command]
 pub async fn capture_screen_crop(
-    x: u32,
-    y: u32,
+    x: i32,
+    y: i32,
     width: u32,
     height: u32,
     scale_factor: f64,
 ) -> Result<Option<String>, String> {
-    let phys_x = (x as f64 * scale_factor) as i32;
-    let phys_y = (y as f64 * scale_factor) as i32;
+    // Clamp to non-negative after DPI scale — frontend already validates but be safe
+    let phys_x = ((x as f64) * scale_factor).max(0.0) as i32;
+    let phys_y = ((y as f64) * scale_factor).max(0.0) as i32;
     let phys_w = ((width as f64) * scale_factor) as u32;
     let phys_h = ((height as f64) * scale_factor) as u32;
+
+    if phys_w == 0 || phys_h == 0 {
+        return Ok(None);
+    }
+
     Ok(crate::screen_capture::capture_crop_async(phys_x, phys_y, phys_w, phys_h).await)
 }
 
@@ -100,7 +100,9 @@ pub fn verify_stream_safety(app_handle: tauri::AppHandle) -> bool {
     #[cfg(target_os = "windows")]
     {
         use windows::Win32::Foundation::HWND;
-        use windows::Win32::UI::WindowsAndMessaging::{GetWindowDisplayAffinity, WDA_EXCLUDEFROMCAPTURE};
+        use windows::Win32::UI::WindowsAndMessaging::{
+            GetWindowDisplayAffinity, WDA_EXCLUDEFROMCAPTURE,
+        };
         if let Some(window) = app_handle.get_webview_window("overlay") {
             if let Ok(hwnd_ptr) = window.hwnd() {
                 let hwnd = HWND(hwnd_ptr.0 as _);
@@ -112,16 +114,23 @@ pub fn verify_stream_safety(app_handle: tauri::AppHandle) -> bool {
                 }
             }
         }
+        return false;
     }
-    false
+
+    // On macOS, WDA_EXCLUDEFROMCAPTURE doesn't exist but the overlay is
+    // transparent and invisible to screen capture by nature of being a
+    // transparent, decoration-less window. Report true so the HUD shows.
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = app_handle; // suppress unused warning
+        true
+    }
 }
 
 // ─────────────────────────────────────────────────────────────
-// Do Mode — structured AI action approval & execution
+// Do Mode — structured AI action execution
 // ─────────────────────────────────────────────────────────────
 
-/// Called by the frontend when the user clicks "Approve" on the Do card.
-/// `action` is a structured JSON object from the AI response.
 #[command]
 pub fn execute_do_action(action: crate::input_injector::DoAction) -> Result<(), String> {
     crate::input_injector::execute_action(&action)

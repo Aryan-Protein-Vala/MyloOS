@@ -7,11 +7,16 @@ use windows_capture::{
     settings::{ColorFormat, CursorCaptureSettings, DrawBorderSettings, Settings},
 };
 
+#[cfg(target_os = "windows")]
 use image::{ImageBuffer, Rgba, imageops::FilterType};
+#[cfg(target_os = "windows")]
 use base64::{Engine as _, engine::general_purpose};
+#[cfg(target_os = "windows")]
 use std::io::Cursor;
+#[cfg(target_os = "windows")]
 use tokio::sync::oneshot;
 
+/// Placeholder — unused for now, kept for future raw capture pipeline
 pub fn capture() -> Vec<u8> {
     vec![]
 }
@@ -41,43 +46,52 @@ impl GraphicsCaptureApiHandler for CaptureHandler {
         capture_control: InternalCaptureControl,
     ) -> Result<(), Self::Error> {
         let mut base64_result = None;
-        
+
         let screen_width = frame.width();
         let screen_height = frame.height();
-        
+
         if let Ok(mut buffer) = frame.buffer() {
-            let buffer_ref = buffer.as_raw_nopadding_buffer().unwrap_or(buffer.as_raw_buffer());
-            // It's BGRA format usually
-            
-            // Convert to Rgba
-            let mut pixels = buffer_ref.to_vec();
+            // as_raw_nopadding_buffer removes row padding for accurate BGRA reads.
+            // On error, fall back to the padded buffer (data will still be usable).
+            let raw_bytes = match buffer.as_raw_nopadding_buffer() {
+                Ok(b) => b.to_vec(),
+                Err(_) => buffer.as_raw_buffer().to_vec(),
+            };
+
+            // BGRA → RGBA swap
+            let mut pixels = raw_bytes;
             for chunk in pixels.chunks_exact_mut(4) {
-                let b = chunk[0];
-                let r = chunk[2];
-                chunk[0] = r;
-                chunk[2] = b;
+                chunk.swap(0, 2); // swap B and R
             }
-            
-            if let Some(img) = ImageBuffer::<Rgba<u8>, Vec<u8>>::from_raw(screen_width, screen_height, pixels) {
-                // Now crop it
-                // Make sure x and y are within bounds
-                let mut crop_x = self.x as u32;
-                let mut crop_y = self.y as u32;
-                let mut crop_w = self.width;
-                let mut crop_h = self.height;
 
-                if crop_x >= screen_width { crop_x = 0; }
-                if crop_y >= screen_height { crop_y = 0; }
-                if crop_x + crop_w > screen_width { crop_w = screen_width - crop_x; }
-                if crop_y + crop_h > screen_height { crop_h = screen_height - crop_y; }
+            if let Some(img) =
+                ImageBuffer::<Rgba<u8>, Vec<u8>>::from_raw(screen_width, screen_height, pixels)
+            {
+                // Clamp crop rect strictly within monitor bounds
+                let crop_x = (self.x as u32).min(screen_width.saturating_sub(1));
+                let crop_y = (self.y as u32).min(screen_height.saturating_sub(1));
+                let crop_w = self.width.min(screen_width - crop_x);
+                let crop_h = self.height.min(screen_height - crop_y);
 
-                let mut cropped = image::imageops::crop_imm(&img, crop_x, crop_y, crop_w, crop_h).to_image();
+                if crop_w == 0 || crop_h == 0 {
+                    if let Some(sender) = self.sender.take() {
+                        let _ = sender.send(None);
+                    }
+                    capture_control.stop();
+                    return Ok(());
+                }
 
+                let mut cropped =
+                    image::imageops::crop_imm(&img, crop_x, crop_y, crop_w, crop_h).to_image();
+
+                // Downscale to 1024px max dimension to keep AI token usage sane
                 if crop_w > 1024 || crop_h > 1024 {
-                    let new_width = if crop_w > crop_h { 1024 } else { (1024.0 * crop_w as f32 / crop_h as f32) as u32 };
-                    let new_height = if crop_h > crop_w { 1024 } else { (1024.0 * crop_h as f32 / crop_w as f32) as u32 };
-                    
-                    cropped = image::imageops::resize(&cropped, new_width, new_height, FilterType::Triangle);
+                    let (new_w, new_h) = if crop_w > crop_h {
+                        (1024, (1024.0 * crop_h as f32 / crop_w as f32) as u32)
+                    } else {
+                        ((1024.0 * crop_w as f32 / crop_h as f32) as u32, 1024)
+                    };
+                    cropped = image::imageops::resize(&cropped, new_w, new_h, FilterType::Triangle);
                 }
 
                 let mut buf = Cursor::new(Vec::new());
@@ -88,16 +102,19 @@ impl GraphicsCaptureApiHandler for CaptureHandler {
                     cropped.height(),
                     image::ColorType::Rgba8,
                     image::ImageFormat::Jpeg,
-                ).is_ok() {
-                    base64_result = Some(general_purpose::STANDARD.encode(buf.into_inner()));
+                )
+                .is_ok()
+                {
+                    base64_result =
+                        Some(general_purpose::STANDARD.encode(buf.into_inner()));
                 }
             }
         }
-        
+
         if let Some(sender) = self.sender.take() {
             let _ = sender.send(base64_result);
         }
-        
+
         capture_control.stop();
         Ok(())
     }
@@ -106,16 +123,21 @@ impl GraphicsCaptureApiHandler for CaptureHandler {
         &mut self,
         _capture_control: InternalCaptureControl,
     ) -> Result<(), Self::Error> {
+        // If the session closed before we got a frame, send None so the awaiting
+        // future doesn't hang forever.
+        if let Some(sender) = self.sender.take() {
+            let _ = sender.send(None);
+        }
         Ok(())
     }
 }
 
-pub async fn capture_crop_async(x: i32, y: i32, width: u32, height: u32) -> Option<String> {
+pub async fn capture_crop_async(_x: i32, _y: i32, _width: u32, _height: u32) -> Option<String> {
     #[cfg(target_os = "windows")]
     {
         let (tx, rx) = oneshot::channel();
-        
-        let primary_monitor = Monitor::primary().unwrap();
+
+        let primary_monitor = Monitor::primary().ok()?;
         let settings = Settings::new(
             primary_monitor.into(),
             CursorCaptureSettings::WithoutCursor,
@@ -123,12 +145,12 @@ pub async fn capture_crop_async(x: i32, y: i32, width: u32, height: u32) -> Opti
             ColorFormat::Bgra8,
             (x, y, width, height, tx),
         );
-        
-        // Run capture on a separate thread to not block tokio worker
+
+        // Spawn onto a dedicated OS thread — WGC requires its own STA/MTA context
         std::thread::spawn(move || {
             let _ = windows_capture::capture::GraphicsCaptureApi::start::<CaptureHandler>(settings);
         });
-        
+
         rx.await.unwrap_or(None)
     }
 

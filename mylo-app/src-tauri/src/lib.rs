@@ -24,7 +24,6 @@ pub fn run() {
             ipc::toggle_overlay,
             ipc::save_api_key,
             ipc::get_api_key,
-            ipc::capture_active_monitor,
             ipc::capture_screen_crop,
             ipc::set_overlay_interactive,
             ipc::verify_stream_safety,
@@ -32,7 +31,7 @@ pub fn run() {
         ])
         .setup(|app| {
             // ── Overlay window: make it click-through, topmost, and stream-safe ──
-            let overlay_window = app.get_webview_window("overlay").unwrap();
+            let _overlay_window = app.get_webview_window("overlay").unwrap();
 
             #[cfg(target_os = "windows")]
             {
