@@ -208,6 +208,8 @@ mod tests {
             action_type: kind.to_string(),
             x: Some(100),
             y: Some(100),
+            ratio_x: None,
+            ratio_y: None,
             text: None,
             scroll_amount: None,
             description: "test action".to_string(),
@@ -298,5 +300,100 @@ mod tests {
         assert!(BOUNDS.contains(0, 0));
         assert!(!BOUNDS.contains(1920, 0));
         assert!(!BOUNDS.contains(0, 1080));
+    }
+}
+
+#[cfg(test)]
+mod wire_format_tests {
+    use super::*;
+
+    /// The model reply that the system prompt in `ipc.rs` asks for, verbatim.
+    ///
+    /// This is the actual regression: the prompt used to request `action_type`
+    /// and `scroll_amount` while `rename_all = "camelCase"` made serde require
+    /// `actionType` and `scrollAmount`. Because `action_type` is not an
+    /// `Option`, every single model reply failed to deserialise and Do Mode
+    /// reported "couldn't determine a safe action" 100% of the time — with no
+    /// error anywhere, because the parse result was discarded by `if let Ok`.
+    const PROMPT_SHAPED_REPLY: &str = r#"{
+        "actionType": "click",
+        "ratioX": 0.5,
+        "ratioY": 0.25,
+        "text": null,
+        "scrollAmount": null,
+        "description": "Click the Save button"
+    }"#;
+
+    #[test]
+    fn deserialises_a_reply_shaped_like_the_prompt() {
+        let action: DoAction = serde_json::from_str(PROMPT_SHAPED_REPLY)
+            .expect("the prompt's JSON shape must deserialise into DoAction");
+        assert_eq!(action.action_type, "click");
+        assert_eq!(action.ratio_x, Some(0.5));
+        assert_eq!(action.ratio_y, Some(0.25));
+        assert_eq!(action.description, "Click the Save button");
+    }
+
+    /// The model's refusal path has to parse too, otherwise a polite decline
+    /// is indistinguishable from a provider outage.
+    #[test]
+    fn deserialises_the_decline_reply() {
+        let json = r#"{"actionType":"none","description":"Cannot determine safe action"}"#;
+        let action: DoAction =
+            serde_json::from_str(json).expect("the decline shape must deserialise");
+        assert_eq!(action.action_type, "none");
+    }
+
+    /// Pins the serialised field names. Renaming a field, or dropping
+    /// `rename_all`, fails here rather than at runtime in front of a user.
+    ///
+    /// These names are load-bearing in three places at once: the system prompt
+    /// in `ipc.rs`, the `DoAction` interface in `lib/ai-client.ts`, and the
+    /// approval gate that renders `pendingAction.actionType`.
+    #[test]
+    fn serde_field_names_match_the_prompt() {
+        let action = DoAction {
+            action_type: "scroll".into(),
+            x: Some(10),
+            y: Some(20),
+            ratio_x: Some(0.1),
+            ratio_y: Some(0.2),
+            text: None,
+            scroll_amount: Some(-3),
+            description: "Scroll up".into(),
+        };
+
+        let value = serde_json::to_value(&action).expect("DoAction must serialise");
+        let object = value.as_object().expect("DoAction serialises to an object");
+
+        let mut keys: Vec<&str> = object.keys().map(String::as_str).collect();
+        keys.sort_unstable();
+
+        assert_eq!(
+            keys,
+            vec![
+                "actionType",
+                "description",
+                "ratioX",
+                "ratioY",
+                "scrollAmount",
+                "text",
+                "x",
+                "y",
+            ],
+            "DoAction's wire field names changed; update the system prompt in \
+             ipc.rs and the DoAction interface in lib/ai-client.ts to match"
+        );
+    }
+
+    /// Snake_case must *not* silently parse. If someone reintroduces the old
+    /// prompt this test fails immediately instead of shipping.
+    #[test]
+    fn rejects_snake_case_replies() {
+        let json = r#"{"action_type":"click","description":"x"}"#;
+        assert!(
+            serde_json::from_str::<DoAction>(json).is_err(),
+            "snake_case must be rejected, so prompt drift cannot pass silently"
+        );
     }
 }
