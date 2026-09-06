@@ -16,9 +16,9 @@ export default function ContactPage() {
 
       <section className="shell max-w-2xl">
         <div className="section-heading">
-          <span className="eyebrow">Get in touch</span>
+          <span className="eyebrow">Get in touch <span className="lowercase normal-case font-normal">(not like that)</span></span>
           <h1 className="text-4xl md:text-5xl font-bold mt-4 mb-8 leading-tight tracking-tight">Contact Us</h1>
-          <p className="text-[#444] text-lg">Have a question, feedback, or need support? Drop us a message below.</p>
+          <p className="text-[#444] text-lg">Found a bug? Want to yell at us? Need someone to talk to at 3 AM? Drop a message below, we read everything.</p>
         </div>
         
         <form 
@@ -74,21 +74,15 @@ export default function ContactPage() {
       </section>
 
       <footer className="footer shell mt-20">
-        <div className="brand">
-          <span className="brand-mark">✳</span>
-          <span><strong>MYLO</strong><small>[os-native engine]</small></span>
-        </div>
+        <div className="brand"><span className="brand-mark">✳</span><span><strong>MYLO</strong><small>[os-native agent]</small></span></div>
         <div className="footer-links">
-          <a href="https://github.com/Aryan-Protein-Vala/MyloOS" target="_blank" rel="noopener noreferrer">GitHub <GitBranch size={15}/></a>
-          <Link href="/contact">Contact Us <ArrowUpRight size={15}/></Link>
-          <Link href="/privacy">Privacy Policy</Link>
-          <Link href="/terms">Terms</Link>
+          <a href="https://github.com/Aryan-Protein-Vala/MyloOS" target="_blank" rel="noopener noreferrer">GitHub <GitBranch size={15} /></a>
+          <Link href="/contact">Contact Us <ArrowUpRight size={15} /></Link>
+          <a href="/privacy">Privacy Policy</a>
+          <a href="/terms">Terms</a>
         </div>
-        <div className="platforms">
-          <span><i className="live"/> Windows: LIVE</span>
-          <span><i/> macOS: IN PROGRESS</span>
-        </div>
-        <p className="copyright">© 2026 MYLO. Made for curious humans.</p>
+        <div className="platforms"><span><i className="live" /> Windows: EARLY ACCESS</span><span><i className="live" /> macOS: EARLY ACCESS</span></div>
+        <p className="copyright">© 2026 MYLO. Built by people who actually use their own product.</p>
       </footer>
     </main>
   )
