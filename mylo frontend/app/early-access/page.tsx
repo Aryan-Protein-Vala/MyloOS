@@ -103,13 +103,13 @@ export default function EarlyAccessPage() {
                 disabled={submitting}
               >
                 <option value="">Pick one (honestly)</option>
-                <option value="developer">Developer / Engineer</option>
-                <option value="designer">Designer / Creative</option>
-                <option value="founder">Founder / Building something</option>
-                <option value="student">Student (respect)</option>
-                <option value="streamer">Streamer / Content Creator</option>
-                <option value="pm">Product Manager</option>
-                <option value="other">Something else entirely</option>
+                <option value="developer">Code Monkey (Developer/Engineer)</option>
+                <option value="designer">Pixel Pusher (Designer/Creative)</option>
+                <option value="founder">Stressed Founder (Building something)</option>
+                <option value="student">Broke Student (Respect)</option>
+                <option value="streamer">Professional Yapper (Streamer/Creator)</option>
+                <option value="pm">Jira Ticket Master (Product Manager)</option>
+                <option value="other">I just vibe (Other)</option>
               </select>
             </div>
 
