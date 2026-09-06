@@ -2,6 +2,7 @@ import { invoke } from '@tauri-apps/api/core'
 
 export interface DoAction {
   actionType: 'click' | 'doubleClick' | 'rightClick' | 'move' | 'type' | 'scroll' | 'none'
+  status?: 'running' | 'complete'
   x?: number
   y?: number
   ratioX?: number

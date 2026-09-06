@@ -180,6 +180,7 @@ pub fn set_overlay_mode(app_handle: AppHandle, mode: String) -> Result<(), Strin
         "ask" => OverlayMode::Ask,
         "do" => OverlayMode::Do,
         "coach" => OverlayMode::Coach,
+        "agent" => OverlayMode::Agent,
         other => return Err(format!("Unknown overlay mode '{other}'")),
     };
     app_handle.state::<AppState>().set_mode(parsed);
@@ -436,6 +437,45 @@ pub fn cancel_do_action(app_handle: AppHandle) {
         guard.disarm();
     }
 }
+
+/// Execute an action in an automated Agentic loop without manual approval.
+/// Validates desktop bounds, checks panic state, and ensures overlay is click-through.
+#[command]
+pub fn execute_agentic_action(app_handle: AppHandle, action: DoAction) -> Result<(), String> {
+    let bounds = desktop_bounds(&app_handle)?;
+    crate::input_injector::validate(&action, bounds)?;
+
+    // Abort immediately if overlay is hidden or panic hotkey was triggered
+    let state = app_handle.state::<AppState>();
+    if state.mode() == OverlayMode::Hidden {
+        return Err("Action aborted: overlay is hidden or panic hotkey was pressed".to_string());
+    }
+
+    // Ensure overlay is set to click-through so the input hits the desktop app beneath
+    if let Ok(window) = overlay(&app_handle) {
+        let _ = window.set_ignore_cursor_events(true);
+    }
+    
+    let result = crate::input_injector::execute_action(&action, bounds);
+
+    match &result {
+        Ok(()) => log::info!("[MYLO agentic] Executed: {} — {}", action.action_type, action.description),
+        Err(e) => log::error!("[MYLO agentic] Failed: {} — {e}", action.action_type),
+    }
+
+    result
+}
+
+/// Execute a chain of actions in an automated Agentic loop sequentially.
+#[command]
+pub fn execute_agentic_chain(app_handle: AppHandle, actions: Vec<DoAction>) -> Result<(), String> {
+    for action in actions {
+        execute_agentic_action(app_handle.clone(), action)?;
+        std::thread::sleep(std::time::Duration::from_millis(350));
+    }
+    Ok(())
+}
+
 async fn call_gemini_ask(
     client: &reqwest::Client,
     key: &str,
@@ -665,7 +705,7 @@ pub async fn analyze_for_do_mode(
     // know the crop's offset on the desktop or how far it was downscaled before
     // being sent. The caller converts the ratios back to global physical pixels
     // using the rect that `capture_screen_crop` actually captured.
-    let system_prompt = "You are MYLO, an AI that controls a user's computer via approved actions.\nAnalyze the screenshot and the user's intent. Return ONLY a JSON object with this exact shape:\n{\n  \"actionType\": \"click\" | \"doubleClick\" | \"rightClick\" | \"move\" | \"type\" | \"scroll\",\n  \"ratioX\": <float between 0.0 and 1.0 for the X coordinate in the image, or null>,\n  \"ratioY\": <float between 0.0 and 1.0 for the Y coordinate in the image, or null>,\n  \"text\": <string to type, or null>,\n  \"scrollAmount\": <integer notches, positive scrolls down, or null>,\n  \"description\": \"<one sentence: what this action will do>\"\n}\nIf you cannot safely determine an action, return: {\"actionType\":\"none\",\"description\":\"Cannot determine safe action\"}";
+    let system_prompt = "You are MYLO, an AI that controls a user's computer via approved actions.\nAnalyze the screenshot and the user's intent. Return ONLY a JSON object with this exact shape:\n{\n  \"actionType\": \"click\" | \"doubleClick\" | \"rightClick\" | \"move\" | \"type\" | \"scroll\",\n  \"status\": \"running\" | \"complete\",\n  \"ratioX\": <float between 0.0 and 1.0 for the X coordinate in the image, or null>,\n  \"ratioY\": <float between 0.0 and 1.0 for the Y coordinate in the image, or null>,\n  \"text\": <string to type, or null>,\n  \"scrollAmount\": <integer notches, positive scrolls down, or null>,\n  \"description\": \"<one sentence: what this action will do>\"\n}\nIf this is the final action needed to complete the user's goal or no more actions are required, set \"status\": \"complete\". If further steps are needed, set \"status\": \"running\".\nIf you cannot safely determine an action, return: {\"actionType\":\"none\",\"status\":\"complete\",\"description\":\"Cannot determine safe action\"}";
 
     let client = reqwest::Client::new();
 

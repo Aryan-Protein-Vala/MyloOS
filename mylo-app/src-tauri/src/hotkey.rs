@@ -105,6 +105,12 @@ pub fn bindings() -> Vec<Binding> {
             code: Code::KeyC,
         },
         Binding {
+            action: "ptt",
+            description: "Push-To-Talk to MYLO",
+            modifiers: Modifiers::CONTROL.union(Modifiers::ALT),
+            code: Code::Space,
+        },
+        Binding {
             action: "panic",
             description: "Hide the overlay and cancel any pending action",
             modifiers: PANIC_MODS,
@@ -112,6 +118,8 @@ pub fn bindings() -> Vec<Binding> {
         },
     ]
 }
+
+static PTT_ACTIVE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 /// Show the overlay in `mode`, or hide it if that mode is already showing.
 ///
@@ -174,6 +182,31 @@ pub fn register_hotkeys(app: &AppHandle) {
         let result = app.global_shortcut().on_shortcut(
             binding.shortcut(),
             move |_app, _shortcut, event| {
+                if action == "ptt" {
+                    if event.state() == ShortcutState::Pressed {
+                        // Debounce: ignore repeated Pressed events caused by OS key autorepeat
+                        if !PTT_ACTIVE.swap(true, std::sync::atomic::Ordering::SeqCst) {
+                            let state = handle.state::<AppState>();
+                            state.set_mode(OverlayMode::Agent);
+                            if let Some(overlay) = handle.get_webview_window("overlay") {
+                                if let Err(e) = crate::ipc::position_overlay_on_active_monitor(&handle) {
+                                    log::warn!("[MYLO hotkeys] Could not place overlay for PTT: {e}");
+                                }
+                                let _ = overlay.set_ignore_cursor_events(true);
+                                let _ = overlay.show();
+                                let _ = overlay.emit("ptt-state-changed", "pressed");
+                            }
+                        }
+                    } else if event.state() == ShortcutState::Released {
+                        if PTT_ACTIVE.swap(false, std::sync::atomic::Ordering::SeqCst) {
+                            if let Some(overlay) = handle.get_webview_window("overlay") {
+                                let _ = overlay.emit("ptt-state-changed", "released");
+                            }
+                        }
+                    }
+                    return;
+                }
+
                 // The handler is invoked on both key-down and key-up. Without
                 // this guard every press runs the body twice.
                 if event.state() != ShortcutState::Pressed {

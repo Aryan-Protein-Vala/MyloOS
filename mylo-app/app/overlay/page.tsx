@@ -1,11 +1,13 @@
 'use client'
 
 import { useEffect, useRef, useState, useCallback } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { MousePointer2, CheckCircle2, XCircle, MessageSquare } from 'lucide-react'
 import { RoughCircle } from '@/components/ui/design-system'
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import { askAi, analyzeForDoMode, type DoAction } from '@/lib/ai-client'
+import { startRecording, stopRecordingAndTranscribe, playTTS } from '@/lib/audioStream'
 
 type OverlayMode = 'hidden' | 'coach' | 'do' | 'ask'
 
@@ -17,7 +19,7 @@ interface Selection {
 }
 
 export default function OverlayPage() {
-  const [mode, setMode] = useState<OverlayMode>('ask')
+  const [mode, setMode] = useState<OverlayMode>('hidden')
   const [targetPos, setTargetPos] = useState({ x: 300, y: 200 })
 
   // ── Ask Mode ───────────────────────────────────────────────────────────────
@@ -39,13 +41,31 @@ export default function OverlayPage() {
   const [doError, setDoError] = useState<string | null>(null)
   const intentInputRef = useRef<HTMLInputElement>(null)
 
+  // ── Agentic State Machine ──────────────────────────────────────────────────
+  const [isPttPressed, setIsPttPressed] = useState(false)
+  const [agentPhase, setAgentPhase] = useState<'idle' | 'listening' | 'thinking' | 'acting'>('idle')
+  const [agentCursor, setAgentCursor] = useState<{x: number, y: number} | null>(null)
+  const [agentMessage, setAgentMessage] = useState<string | null>(null)
+
   // ── Stream safety ──────────────────────────────────────────────────────────
   const [isStreamSafe, setIsStreamSafe] = useState(false)
 
-  // ── Double-Esc dismiss ─────────────────────────────────────────────────────
+  // ── Double-Esc dismiss & Cancellation ──────────────────────────────────────
   const lastEscTime = useRef(0)
+  const isAgentCancelledRef = useRef(false)
+  const micFailedRef = useRef(false)
+  const agentTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   const dismissOverlay = useCallback(async () => {
+    isAgentCancelledRef.current = true
+    if (agentTimeoutRef.current) {
+      clearTimeout(agentTimeoutRef.current)
+      agentTimeoutRef.current = null
+    }
+    setAgentPhase('idle')
+    setAgentMessage(null)
+    setAgentCursor(null)
+
     setMode('hidden')
     setAskSelection(null)
     setAskResponse(null)
@@ -55,6 +75,9 @@ export default function OverlayPage() {
     setPendingAction(null)
     setDoError(null)
     setUserIntent('')
+    try {
+      await invoke('cancel_do_action')
+    } catch {}
     await invoke('toggle_overlay', { visible: false, clickThrough: true })
   }, [])
 
@@ -70,6 +93,7 @@ export default function OverlayPage() {
 
     let unlistenState: (() => void) | null = null
     let unlistenTarget: (() => void) | null = null
+    let unlistenPtt: (() => void) | null = null
 
     const setup = async () => {
       if (typeof window === 'undefined' || !(window as unknown as { __TAURI_INTERNALS__: unknown }).__TAURI_INTERNALS__) return
@@ -93,6 +117,16 @@ export default function OverlayPage() {
           setUserIntent('')
           invoke('set_overlay_interactive', { interactive: true }) // do mode needs drawing too
         } else if (newMode === 'hidden') {
+          isAgentCancelledRef.current = true
+          if (agentTimeoutRef.current) {
+            clearTimeout(agentTimeoutRef.current)
+            agentTimeoutRef.current = null
+          }
+          setAgentPhase('idle')
+          setAgentMessage(null)
+          setAgentCursor(null)
+          setDoPhase('idle')
+          setPendingAction(null)
           invoke('set_overlay_interactive', { interactive: false })
         } else {
           invoke('set_overlay_interactive', { interactive: false })
@@ -122,6 +156,69 @@ export default function OverlayPage() {
       } else {
         unlistenTarget = cleanTarget
       }
+
+      // PTT listener
+      const cleanPtt = await listen<string>('ptt-state-changed', async (event) => {
+        if (!mounted) return
+        const state = event.payload
+        if (state === 'pressed') {
+          if (agentTimeoutRef.current) {
+            clearTimeout(agentTimeoutRef.current)
+            agentTimeoutRef.current = null
+          }
+          micFailedRef.current = false
+          isAgentCancelledRef.current = false
+          setIsPttPressed(true)
+          setAgentPhase('listening')
+          setAgentMessage('Listening to you...')
+          const started = await startRecording()
+          if (!started) {
+            micFailedRef.current = true
+            setAgentMessage('Microphone access failed. Check permissions.')
+            agentTimeoutRef.current = setTimeout(async () => {
+              setAgentPhase('idle')
+              setAgentMessage(null)
+              try {
+                await invoke('toggle_overlay', { visible: false, clickThrough: true })
+              } catch {}
+            }, 3000)
+          }
+        } else if (state === 'released') {
+          setIsPttPressed(false)
+          if (micFailedRef.current || isAgentCancelledRef.current) return
+
+          setAgentPhase('thinking')
+          setAgentMessage('Transcribing...')
+          const groqKey = await invoke<string | null>('get_api_key', { provider: 'groq' })
+          const res = await stopRecordingAndTranscribe(groqKey || '')
+          
+          if (isAgentCancelledRef.current) {
+            setAgentPhase('idle')
+            setAgentMessage(null)
+            return
+          }
+
+          if (res.text && res.text.trim()) {
+            setAgentMessage(`Thinking about: "${res.text.trim()}"`)
+            await runAgenticLoop(res.text.trim())
+          } else {
+            setAgentMessage(res.error || (groqKey ? 'No speech detected.' : 'Groq API Key required for voice.'))
+            agentTimeoutRef.current = setTimeout(async () => {
+              setAgentPhase('idle')
+              setAgentMessage(null)
+              try {
+                await invoke('toggle_overlay', { visible: false, clickThrough: true })
+              } catch {}
+            }, 2500)
+          }
+        }
+      })
+
+      if (!mounted) {
+        cleanPtt()
+      } else {
+        unlistenPtt = cleanPtt
+      }
     }
 
     setup().catch(console.error)
@@ -142,9 +239,100 @@ export default function OverlayPage() {
       mounted = false
       if (unlistenState) unlistenState()
       if (unlistenTarget) unlistenTarget()
+      if (unlistenPtt) unlistenPtt()
       window.removeEventListener('keydown', onKeyDown)
     }
   }, [dismissOverlay])
+
+  const runAgenticLoop = async (intent: string) => {
+    isAgentCancelledRef.current = false
+    setAgentPhase('thinking')
+
+    const MAX_STEPS = 5
+    let currentStep = 0
+    let isComplete = false
+
+    try {
+      const sarvamKey = await invoke<string | null>('get_api_key', { provider: 'sarvam' })
+
+      while (currentStep < MAX_STEPS && !isComplete && !isAgentCancelledRef.current) {
+        currentStep++
+        setAgentMessage(currentStep === 1 ? 'Analyzing screen...' : `Step ${currentStep}: Analyzing screen...`)
+
+        const width = typeof window !== 'undefined' ? window.innerWidth : 1920
+        const height = typeof window !== 'undefined' ? window.innerHeight : 1080
+
+        const { image: base64Img, rect } = await invoke<{
+          image: string | null
+          rect: { x: number; y: number; width: number; height: number }
+        }>('capture_screen_crop', {
+          x: 0,
+          y: 0,
+          width,
+          height,
+        })
+
+        if (!base64Img || isAgentCancelledRef.current) break
+
+        const action = await analyzeForDoMode(base64Img, intent, rect)
+        if (isAgentCancelledRef.current) break
+
+        if (!action || action.actionType === 'none') {
+          if (sarvamKey && currentStep === 1) {
+            playTTS("I'm not sure how to complete that action.", sarvamKey).catch(console.error)
+          }
+          setAgentMessage("Could not determine safe action.")
+          break
+        }
+
+        setAgentPhase('acting')
+        setAgentMessage(`Step ${currentStep}: ${action.description}`)
+
+        if (sarvamKey) {
+          playTTS(`I will ${action.description}`, sarvamKey).catch(console.error)
+        }
+
+        // Animate Bezier cursor to target coordinate (scale physical pixels to CSS pixels)
+        if (action.x != null && action.y != null) {
+          const dpr = typeof window !== 'undefined' ? (window.devicePixelRatio || 1) : 1
+          const overlayX = (action.x - rect.x) / dpr
+          const overlayY = (action.y - rect.y) / dpr
+          setAgentCursor({ x: overlayX, y: overlayY })
+          // Allow flight animation to guide user eye before executing
+          await new Promise((r) => setTimeout(r, 750))
+        }
+
+        if (isAgentCancelledRef.current) break
+
+        // Execute action in Rust
+        await invoke('execute_agentic_action', { action })
+
+        // Check if task is finished
+        if (action.status === 'complete') {
+          isComplete = true
+          setAgentMessage(`Complete: ${action.description}`)
+          break
+        }
+
+        // Delay between loop iterations for UI to settle
+        await new Promise((r) => setTimeout(r, 600))
+      }
+    } catch (e) {
+      console.error("Agentic loop error:", e)
+      setAgentMessage('Action failed or cancelled.')
+    } finally {
+      agentTimeoutRef.current = setTimeout(async () => {
+        setAgentPhase('idle')
+        setAgentMessage(null)
+        setAgentCursor(null)
+        if (mode === 'hidden') {
+          try {
+            await invoke('toggle_overlay', { visible: false, clickThrough: true })
+          } catch {}
+        }
+      }, 2500)
+    }
+  }
 
   // ── Ask Mode pointer handlers ──────────────────────────────────────────────
 
@@ -276,18 +464,31 @@ export default function OverlayPage() {
 
   const handleApproveAction = async () => {
     if (!pendingAction) return
+    const actionToRun = pendingAction
     setDoPhase('executing')
     setDoError(null)
     try {
-      await invoke('approve_do_action', { action: pendingAction })
-      // Must dismiss overlay first, otherwise Enigo clicks hit the overlay itself!
-      await dismissOverlay()
+      // 1. Hide overlay first without disarming the action guard
+      setMode('hidden')
+      setDoPhase('idle')
+      setDoSelection(null)
+      setPendingAction(null)
+      await invoke('toggle_overlay', { visible: false, clickThrough: true })
+
       // Give window manager 150ms to hide overlay and restore focus to target app
       await new Promise((r) => setTimeout(r, 150))
-      await invoke('execute_do_action', { action: pendingAction })
+
+      // 2. Arm the action guard now that overlay is hidden
+      await invoke('approve_do_action', { action: actionToRun })
+
+      // 3. Execute synthetic input
+      await invoke('execute_do_action', { action: actionToRun })
     } catch (e) {
       setDoError(`Action failed: ${e instanceof Error ? e.message : String(e)}`)
+      setPendingAction(actionToRun)
       setDoPhase('approve')
+      setMode('do')
+      await invoke('toggle_overlay', { visible: true, clickThrough: false })
     }
   }
 
@@ -302,7 +503,7 @@ export default function OverlayPage() {
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
-  if (mode === 'hidden') return null
+  if (mode === 'hidden' && agentPhase === 'idle') return null
 
   const isDoDrawing = mode === 'do' && (doPhase === 'idle' || doPhase === 'drawing')
   const needsPointerEvents =
@@ -330,21 +531,23 @@ export default function OverlayPage() {
       )}
 
       {/* ── Mode hint (top-left) ───────────────────────────────────────── */}
-      <div className="fixed top-4 left-4 pointer-events-none z-[10000]">
-        <div className="bg-[var(--ink)] text-[var(--paper)] px-3 py-1 text-xs font-mono opacity-70 border border-[var(--ink)]">
-          {mode === 'ask' && '● ASK MODE — draw to circle'}
-          {mode === 'do' && doPhase === 'idle' && '● DO MODE — draw around target'}
-          {mode === 'do' && doPhase === 'drawing' && '● DO MODE — drawing...'}
-          {mode === 'do' && doPhase === 'intent' && '● DO MODE — describe your intent'}
-          {mode === 'do' && doPhase === 'analyzing' && '● DO MODE — analyzing...'}
-          {mode === 'do' && doPhase === 'approve' && '● DO MODE — approve action?'}
-          {mode === 'do' && doPhase === 'executing' && '● DO MODE — executing...'}
-          {mode === 'coach' && '● COACH MODE'}
+      {mode !== 'hidden' && (
+        <div className="fixed top-4 left-4 pointer-events-none z-[10000]">
+          <div className="bg-[var(--ink)] text-[var(--paper)] px-3 py-1 text-xs font-mono opacity-70 border border-[var(--ink)]">
+            {mode === 'ask' && '● ASK MODE — draw to circle'}
+            {mode === 'do' && doPhase === 'idle' && '● DO MODE — draw around target'}
+            {mode === 'do' && doPhase === 'drawing' && '● DO MODE — drawing...'}
+            {mode === 'do' && doPhase === 'intent' && '● DO MODE — describe your intent'}
+            {mode === 'do' && doPhase === 'analyzing' && '● DO MODE — analyzing...'}
+            {mode === 'do' && doPhase === 'approve' && '● DO MODE — approve action?'}
+            {mode === 'do' && doPhase === 'executing' && '● DO MODE — executing...'}
+            {mode === 'coach' && '● COACH MODE'}
+          </div>
+          <div className="text-[8px] font-mono text-[var(--ink)] mt-1 opacity-50">
+            double-Esc to dismiss
+          </div>
         </div>
-        <div className="text-[8px] font-mono text-[var(--ink)] mt-1 opacity-50">
-          double-Esc to dismiss
-        </div>
-      </div>
+      )}
 
       {/* ── Coach Mode ────────────────────────────────────────────────── */}
       {mode === 'coach' && (
@@ -569,6 +772,56 @@ export default function OverlayPage() {
           </div>
         </div>
       )}
+
+      {/* ── Agentic HUD & Cursor ──────────────────────────────────────── */}
+      <AnimatePresence>
+        {agentPhase !== 'idle' && (
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 20 }}
+            className="fixed bottom-8 right-8 z-[10002] bg-white border-2 border-[var(--ink)] p-4 rounded-xl shadow-[4px_4px_0_var(--ink)] pointer-events-auto flex items-center gap-4"
+          >
+            <div className={`w-4 h-4 rounded-full ${agentPhase === 'listening' ? 'bg-red-500 animate-pulse' : 'bg-[var(--blue)] animate-bounce'}`} />
+            <div className="font-mono text-sm font-bold text-[var(--ink)] max-w-xs">
+              {agentMessage}
+            </div>
+          </motion.div>
+        )}
+        
+        {agentCursor && (
+          <motion.div
+            initial={false}
+            animate={{ x: agentCursor.x, y: agentCursor.y }}
+            transition={{
+              type: "tween",
+              ease: [0.22, 1, 0.36, 1],
+              duration: 0.75,
+            }}
+            className="fixed z-[10003] pointer-events-none"
+            style={{ width: 32, height: 32, marginLeft: -4, marginTop: -4, left: 0, top: 0 }}
+          >
+            <div className="absolute inset-0 bg-[var(--blue)] rounded-full opacity-30 animate-ping" />
+            <svg
+              width="28"
+              height="28"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="white"
+              strokeWidth="1.5"
+              className="relative drop-shadow-[0_4px_8px_rgba(0,0,0,0.35)]"
+            >
+              <path
+                d="M3 3l7 18 3-7 7-3L3 3z"
+                fill="#3b82f6"
+              />
+            </svg>
+            <div className="absolute left-6 top-6 bg-[var(--ink)] text-white text-[10px] font-mono font-bold px-1.5 py-0.5 rounded shadow border border-white">
+              MYLO
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* ── Overlay-local CSS ──────────────────────────────────────────── */}
       <style dangerouslySetInnerHTML={{

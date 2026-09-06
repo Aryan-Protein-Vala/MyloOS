@@ -22,6 +22,7 @@ pub enum OverlayMode {
     Ask,
     Do,
     Coach,
+    Agent,
 }
 
 impl OverlayMode {
@@ -32,6 +33,7 @@ impl OverlayMode {
             OverlayMode::Ask => "ask",
             OverlayMode::Do => "do",
             OverlayMode::Coach => "coach",
+            OverlayMode::Agent => "agent",
         }
     }
 

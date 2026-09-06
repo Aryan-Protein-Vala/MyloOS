@@ -43,25 +43,28 @@ pub fn run() {
             ipc::execute_do_action,
             ipc::ask_ai,
             ipc::analyze_for_do_mode,
+            ipc::execute_agentic_action,
+            ipc::execute_agentic_chain,
         ])
         .setup(|app| {
             // ── Overlay window: make it click-through, topmost, and stream-safe ──
             if let Some(overlay_window) = app.get_webview_window("overlay") {
                 #[cfg(target_os = "windows")]
                 {
-                    let hwnd_raw = overlay_window.hwnd().unwrap().0 as isize;
-                    let hwnd = HWND(hwnd_raw as _);
-
-                    unsafe {
-                        let ex_style = GetWindowLongW(hwnd, GWL_EXSTYLE);
-                        SetWindowLongW(
-                            hwnd,
-                            GWL_EXSTYLE,
-                            ex_style
-                                | WS_EX_LAYERED.0 as i32
-                                | WS_EX_TOPMOST.0 as i32,
-                        );
-                        let _ = SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE);
+                    if let Ok(hwnd_t) = overlay_window.hwnd() {
+                        let hwnd = HWND(hwnd_t.0 as _);
+                        unsafe {
+                            let ex_style = GetWindowLongW(hwnd, GWL_EXSTYLE);
+                            SetWindowLongW(
+                                hwnd,
+                                GWL_EXSTYLE,
+                                ex_style
+                                    | WS_EX_LAYERED.0 as i32
+                                    | WS_EX_TRANSPARENT.0 as i32
+                                    | WS_EX_TOPMOST.0 as i32,
+                            );
+                            let _ = SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE);
+                        }
                     }
                 }
 

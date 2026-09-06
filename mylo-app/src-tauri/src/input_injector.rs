@@ -46,6 +46,9 @@ impl DesktopBounds {
 pub struct DoAction {
     /// One of: `click`, `doubleClick`, `rightClick`, `move`, `type`, `scroll`.
     pub action_type: String,
+    /// For multi-step agentic loops: "running" or "complete"
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub status: Option<String>,
     /// Global desktop X in physical pixels.
     pub x: Option<i32>,
     /// Global desktop Y in physical pixels.
@@ -206,6 +209,7 @@ mod tests {
     fn action(kind: &str) -> DoAction {
         DoAction {
             action_type: kind.to_string(),
+            status: None,
             x: Some(100),
             y: Some(100),
             ratio_x: None,
@@ -354,6 +358,7 @@ mod wire_format_tests {
     fn serde_field_names_match_the_prompt() {
         let action = DoAction {
             action_type: "scroll".into(),
+            status: None,
             x: Some(10),
             y: Some(20),
             ratio_x: Some(0.1),
