@@ -16,9 +16,9 @@ export default function ContactPage() {
     setSubmitting(true)
     setError('')
     try {
-      const res = await fetch('https://formsubmit.co/ajax/aryansharma24112003@gmail.com', {
+      const res = await fetch('/api/submit', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name,
           email,
