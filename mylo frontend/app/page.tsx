@@ -94,13 +94,20 @@ export default function Page() {
           <div className="status"><CircleDot size={14} /> V1 Early Access <span>•</span> Spots Limited</div>
           <PencilLoop />
         </div>
-        <h1>MYLO: The AI that runs your computer.<br /><span className="text-[var(--blue)] block mt-2 text-[0.65em] font-normal tracking-tight">So you can finally touch grass.</span></h1>
+        <h1>MYLO: The closest thing to Iron Man&apos;s suit.<br /><span className="text-[var(--blue)] block mt-2 text-[0.65em] font-normal tracking-tight">The AI that actually runs your computer.</span></h1>
+        <div className="flex items-center gap-2.5 mt-3 text-[var(--red)] font-mono text-xs font-bold rotate-[-1deg]">
+          <svg className="w-8 h-5 flex-shrink-0 text-[var(--red)]" viewBox="0 0 50 30" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M4 8 C18 6, 32 12, 42 22" />
+            <path d="M33 22 L42 23 L40 14" />
+          </svg>
+          <span>(go search Jarvis, you not-so-man-of-culture... probably watch DC smh)</span>
+        </div>
         <p className="lede">Hold a hotkey, say the task out loud. MYLO hijacks your screen with a ghost cursor and just… does it. Powered by <CortexHover>Cortex</CortexHover>, it remembers everything—your projects, your preferences, your chaos. <strong>No corporate fluff. Just an AI that actually works.</strong></p>
         <div className="cta-row">
           <Link href="/early-access" className="ink-button">Get Early Access <ArrowRight size={16} /></Link>
           <a href="#modes" className="paper-button">See How It Works <ArrowRight size={16} /></a>
         </div>
-        <div className="hero-note"><RoughArrow /><span>your autonomous copilot</span></div>
+        <div className="hero-note"><RoughArrow /><span>hands off keyboard, let it cook</span></div>
       </div>
       <DesktopMockup />
     </section>
