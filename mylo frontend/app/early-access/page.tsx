@@ -74,7 +74,7 @@ export default function EarlyAccessPage() {
               <input
                 id="ea-name"
                 type="text"
-                placeholder="Your name (not 'anonymous123')"
+                placeholder="Pupkin Sharma"
                 value={name}
                 onChange={e => setName(e.target.value)}
                 required
@@ -86,7 +86,7 @@ export default function EarlyAccessPage() {
               <input
                 id="ea-email"
                 type="email"
-                placeholder="Your best email — we&apos;ll actually use it"
+                placeholder="pupkin.sharma@nalla.com"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 required

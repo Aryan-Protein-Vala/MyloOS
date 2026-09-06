@@ -39,7 +39,7 @@ export default function ContactPage() {
               id="name" 
               required 
               className="w-full border-2 border-[var(--ink)] rounded-md px-4 py-3 bg-[var(--paper)] focus:outline-none focus:ring-4 focus:ring-[var(--blue)] focus:border-transparent transition-all"
-              placeholder="Ada Lovelace"
+              placeholder="Sharma ji's elder son (or pupkin sharma)"
             />
           </div>
 
@@ -51,7 +51,7 @@ export default function ContactPage() {
               id="email" 
               required 
               className="w-full border-2 border-[var(--ink)] rounded-md px-4 py-3 bg-[var(--paper)] focus:outline-none focus:ring-4 focus:ring-[var(--blue)] focus:border-transparent transition-all"
-              placeholder="ada@example.com"
+              placeholder="topper_sharma@iitb.edu.in"
             />
           </div>
 
@@ -63,7 +63,7 @@ export default function ContactPage() {
               rows={5} 
               required 
               className="w-full border-2 border-[var(--ink)] rounded-md px-4 py-3 bg-[var(--paper)] focus:outline-none focus:ring-4 focus:ring-[var(--blue)] focus:border-transparent transition-all resize-y"
-              placeholder="How can we help?"
+              placeholder="Bro my code is broken, pls help..."
             ></textarea>
           </div>
 
