@@ -94,7 +94,7 @@ export default function Page() {
           <div className="status"><CircleDot size={14} /> V1 Early Access <span>•</span> Spots Limited</div>
           <PencilLoop />
         </div>
-        <h1>MYLO: The AI that runs your computer.<br /><em className="text-[var(--blue)] block mt-2 text-[0.8em]">The realest thing since Iron Man&apos;s suit.</em></h1>
+        <h1>MYLO: The AI that takes over your laptop so you can touch grass.<br /><em className="text-[var(--blue)] block mt-2 text-[0.8em]">Your mouse moves on its own now. Don&apos;t panic, it&apos;s just doing your job.</em></h1>
         <p className="lede">Hold a hotkey, say the task out loud. MYLO hijacks your screen with a ghost cursor and just… does it. Powered by <CortexHover>Cortex</CortexHover>, it remembers everything—your projects, your preferences, your chaos. <strong>No corporate fluff. Just an AI that actually works.</strong></p>
         <div className="cta-row">
           <Link href="/early-access" className="ink-button">Get Early Access <ArrowRight size={16} /></Link>
