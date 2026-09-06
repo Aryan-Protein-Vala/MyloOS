@@ -20,7 +20,7 @@ function CortexHover({ children }: { children: React.ReactNode }) {
         {children}
       </span>
       <span className="pointer-events-none absolute bottom-full left-1/2 mb-3 w-72 -translate-x-1/2 rounded bg-[var(--ink)] p-3 text-xs text-[var(--paper)] opacity-0 transition-opacity group-hover:opacity-100 z-50 text-left font-mono shadow-[4px_4px_0_var(--purple)]">
-        A universal memory layer. Claude knows what you coded last week. ChatGPT knows what Claude just told you. Every AI you use shares the same brain — yours.
+        Built by our other startup (we literally made a whole separate business for this). It's a semantic memory mesh that extracts reasoning and gist, so every AI you use shares the exact same gigabrain.
         <svg className="absolute top-full left-1/2 -ml-2 h-4 w-4 text-[var(--ink)]" viewBox="0 0 24 24" fill="currentColor">
           <path d="M12 21l-12-18h24z" />
         </svg>
@@ -182,7 +182,7 @@ export default function Page() {
         <p>Free if you&apos;re cheap. Worth it if you&apos;re smart. <CortexHover>Cortex</CortexHover> is where it gets wild.</p>
       </SectionTitle>
       <div className="pricing-grid">
-        <PriceCard free title="MYLO Free (BYOK)" price="$0" suffix="/ month" badge="100% Private • Full Takeover" items={['Plug in your own API keys — OpenRouter, OpenAI, Anthropic, ElevenLabs. You pay the APIs, we charge nothing.','Full GUI takeover, voice, ghost clicks — the works','Local wake word & on-device OCR','Amnesia mode — no Cortex, forgets you after every session']} cta="Grab Free Access"/>
+        <PriceCard free title="MYLO Free (BYOK)" price="$0" suffix="/ month" badge="100% Private • Full Takeover" items={['Plug in your own API keys — OpenRouter, OpenAI, Anthropic, ElevenLabs. You pay the APIs, we charge nothing.','Full GUI takeover, voice, ghost clicks — the works','Local wake word & on-device OCR','Basic AI memory — remembers the session, but lacks the deep Cortex reasoning graph']} cta="Grab Free Access"/>
         <PriceCard title="MYLO Pro" price="$14.99" suffix="/ month" badge="Most Popular • Cortex Enabled" items={[<span key="1"><CortexHover>Cortex</CortexHover> switched on — it starts knowing you</span>,'No API keys needed. Token budget included.','Claude 3.5 Sonnet + GPT-4o, managed by us','Your workflows survive session restarts']} cta="Get Pro Access"/>
         <PriceCard elite title="MYLO Elite" price="$49.99" suffix="/ month" badge="The Whole Damn Thing" items={['Unlimited Cortex memory — it never forgets anything','Heavy reasoning models: Claude 4.6, o3','Background agent spawning — works while you sleep','Premium ElevenLabs voice — it sounds alive']} cta="Get Elite Access"/>
       </div>
