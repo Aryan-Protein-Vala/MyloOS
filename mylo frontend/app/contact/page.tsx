@@ -1,44 +1,9 @@
 'use client'
 
-import { useState } from 'react'
 import { ArrowRight, GitBranch, ArrowUpRight } from 'lucide-react'
 import Link from 'next/link'
 
 export default function ContactPage() {
-  const [name, setName] = useState('')
-  const [email, setEmail] = useState('')
-  const [message, setMessage] = useState('')
-  const [submitting, setSubmitting] = useState(false)
-  const [error, setError] = useState('')
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setSubmitting(true)
-    setError('')
-    try {
-      const res = await fetch('/api/submit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name,
-          email,
-          message,
-          _subject: `🚨 New MYLO Contact Form Submission from ${name}`,
-          _template: 'table',
-        }),
-      })
-      if (res.ok) {
-        window.location.href = '/contact/success'
-      } else {
-        setError('Something went sideways. Try again?')
-      }
-    } catch {
-      setError('Network hiccup. Are you online?')
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
   return (
     <main className="min-h-screen pb-20">
       <nav className="nav shell mb-12">
@@ -57,18 +22,23 @@ export default function ContactPage() {
         </div>
         
         <form 
-          onSubmit={handleSubmit}
+          action="https://formsubmit.co/aryansharma24112003@gmail.com" 
+          method="POST"
           className="bg-white border-2 border-[var(--ink)] shadow-[6px_6px_0_var(--ink)] rounded-xl p-8 space-y-6 mt-8"
         >
+          {/* FormSubmit Configuration */}
+          <input type="hidden" name="_subject" value="New MYLO Contact Form Submission!" />
+          <input type="hidden" name="_captcha" value="false" />
+          <input type="hidden" name="_template" value="box" />
+          <input type="hidden" name="_next" value="https://heymylo.vercel.app/contact/success" />
+
           <div>
             <label htmlFor="name" className="block text-sm font-bold font-mono text-[var(--ink)] mb-2 uppercase">Your Name</label>
             <input 
               type="text" 
               id="name" 
-              value={name}
-              onChange={e => setName(e.target.value)}
+              name="name" 
               required 
-              disabled={submitting}
               className="w-full border-2 border-[var(--ink)] rounded-md px-4 py-3 bg-[var(--paper)] focus:outline-none focus:ring-4 focus:ring-[var(--blue)] focus:border-transparent transition-all"
               placeholder="Sharma ji's elder son"
             />
@@ -79,10 +49,8 @@ export default function ContactPage() {
             <input 
               type="email" 
               id="email" 
-              value={email}
-              onChange={e => setEmail(e.target.value)}
+              name="email" 
               required 
-              disabled={submitting}
               className="w-full border-2 border-[var(--ink)] rounded-md px-4 py-3 bg-[var(--paper)] focus:outline-none focus:ring-4 focus:ring-[var(--blue)] focus:border-transparent transition-all"
               placeholder="topper_sharma@iitb.edu.in"
             />
@@ -92,20 +60,16 @@ export default function ContactPage() {
             <label htmlFor="message" className="block text-sm font-bold font-mono text-[var(--ink)] mb-2 uppercase">Message</label>
             <textarea 
               id="message" 
-              value={message}
-              onChange={e => setMessage(e.target.value)}
+              name="message" 
               rows={5} 
               required 
-              disabled={submitting}
               className="w-full border-2 border-[var(--ink)] rounded-md px-4 py-3 bg-[var(--paper)] focus:outline-none focus:ring-4 focus:ring-[var(--blue)] focus:border-transparent transition-all resize-y"
               placeholder="Bro my code is broken, pls help..."
             ></textarea>
           </div>
 
-          {error && <p className="text-red-500 font-mono text-sm mt-2">{error}</p>}
-
-          <button type="submit" className="ink-button w-full mt-4 !py-4 text-lg" disabled={submitting}>
-            {submitting ? 'Sending...' : <><span className="mr-2">Send Message</span> <ArrowRight size={19} /></>}
+          <button type="submit" className="ink-button w-full mt-4 !py-4 text-lg">
+            Send Message <ArrowRight size={19} className="ml-2 inline" />
           </button>
         </form>
       </section>

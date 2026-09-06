@@ -16,9 +16,9 @@ export default function EarlyAccessPage() {
     setSubmitting(true)
     setError('')
     try {
-      const res = await fetch('/api/submit', {
+      const res = await fetch('https://formsubmit.co/ajax/aryansharma24112003@gmail.com', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
         body: JSON.stringify({
           name,
           email,
