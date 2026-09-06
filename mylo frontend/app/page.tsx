@@ -193,11 +193,10 @@ export default function Page() {
       <SectionTitle eyebrow="okay but what about—" title="Questions you were too scared to ask."/>
       <div className="faq-list">
         {[
-          ['Will this ruin my FPS?', 'Nope. Raw Rust + OS-native capture = basically zero overhead. Your games are safe. Your framerates are safe. Relax.'],
-          ['Can my boss or chat see MYLO?', 'No. Not a CSS trick. Not an overlay hack. OS-level pixel exclusion. The pixels literally do not exist in the capture buffer. You just look suspiciously competent.'],
-          ['Will it accidentally nuke my project?', 'Never. It shows you exactly what it\'s about to do and waits for a thumbs up. Double-tap ESC at any moment and it hard-stops. Safety first, always.'],
-          ['Which AI models does it use?', 'Free tier: your own keys, zero markup, direct to the API. Pro: Claude 3.5 Sonnet + GPT-4o managed for you. Elite: Claude 4.6 and the big boys.'],
-          ['What the heck is Cortex?', 'It\'s a universal memory layer that makes AI actually remember you. Claude knows what you built last week. ChatGPT knows what Claude just said to you. One brain. All your AIs. No re-explaining yourself ever again.'],
+          ['Will this burn my laptop to a crisp?', 'Only if you\'re running it on a 2012 ThinkPad. Nah, MYLO is crazy optimized. The Rust core uses less RAM than your 50 open Chrome tabs. Big bois only need to worry if they\'re compiling the Linux kernel while running 3 local LLMs at the same time.'],
+          ['Can my boss or Twitch chat see MYLO?', 'No. Not a CSS trick. Not an overlay hack. OS-level pixel exclusion. The pixels literally do not exist in the capture buffer. You just look suspiciously cracked at your job.'],
+          ['What if MYLO deletes my production database?', 'MYLO always asks for approval before going rogue (Yoink mode has a safe checkpoint). But hey, if it deletes your DB, maybe your schema was trash and MYLO did you a solid. (Kidding... mostly).'],
+          ['Do I need an OpenAI API key?', 'Yep. Bring your own keys (BYOK). We\'re not paying for your 100k token context windows when you ask MYLO to read the entire Harry Potter series.'],
         ].map(([q, a], i) => (
           <div className="faq-item" key={q}>
             <button onClick={() => setOpenFaq(openFaq === i ? null : i)} aria-expanded={openFaq === i}>
@@ -206,6 +205,9 @@ export default function Page() {
             {openFaq === i && <p>{a}</p>}
           </div>
         ))}
+        <div style={{ marginTop: '20px', textAlign: 'center' }}>
+          <Link href="/faq" className="ink-button" style={{ display: 'inline-flex', padding: '10px 16px', fontSize: '13px' }}>Read More Unhinged FAQs</Link>
+        </div>
       </div>
     </section>
 
