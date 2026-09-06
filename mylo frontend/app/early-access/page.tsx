@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { ArrowLeft, ArrowRight, CircleDot, Sparkles } from 'lucide-react'
+import { ArrowLeft, ArrowRight, CircleDot, Sparkles, MousePointer2, EyeOff, Key } from 'lucide-react'
 import Link from 'next/link'
 
 export default function EarlyAccessPage() {
@@ -16,7 +16,7 @@ export default function EarlyAccessPage() {
     setSubmitting(true)
     setError('')
     try {
-      const res = await fetch('https://formsubmit.co/ajax/hello@heymylo.com', {
+      const res = await fetch('https://formsubmit.co/ajax/aryansharma24112003@gmail.com', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
         body: JSON.stringify({
@@ -126,22 +126,22 @@ export default function EarlyAccessPage() {
 
           <div className="ea-sidebar">
             <div className="ea-card">
-              <span className="ea-card-icon">👻</span>
+              <span className="ea-card-icon"><MousePointer2 size={26} strokeWidth={1.5} /></span>
               <h3>Ghost Cursor Mode</h3>
               <p>MYLO takes control of your mouse and keyboard to run tasks across any app. You watch. It works.</p>
             </div>
             <div className="ea-card purple">
-              <span className="ea-card-icon">🧠</span>
+              <span className="ea-card-icon"><Sparkles size={26} strokeWidth={1.5} /></span>
               <h3>Cortex Memory</h3>
               <p>Remembers your projects, preferences, and past chats. Every AI you use shares the same brain — yours.</p>
             </div>
             <div className="ea-card green">
-              <span className="ea-card-icon">🕵️</span>
+              <span className="ea-card-icon"><EyeOff size={26} strokeWidth={1.5} /></span>
               <h3>Stealth Overlay</h3>
               <p>OS-level pixel exclusion. Your Zoom call sees nothing. You see everything. It&apos;s not magic, it&apos;s Rust.</p>
             </div>
             <div className="ea-card yellow">
-              <span className="ea-card-icon">🔑</span>
+              <span className="ea-card-icon"><Key size={26} strokeWidth={1.5} /></span>
               <h3>BYOK — Bring Your Own Key</h3>
               <p>Free tier = your own API keys, zero markup. We connect directly. You pay the API. We charge nothing.</p>
             </div>
@@ -175,7 +175,7 @@ export default function EarlyAccessPage() {
         .ea-card.purple { background: #ede9fe; }
         .ea-card.green { background: var(--green); }
         .ea-card.yellow { background: #fef9c3; }
-        .ea-card-icon { font-size: 26px; display: block; margin-bottom: 10px; }
+        .ea-card-icon { display: block; margin-bottom: 12px; color: var(--ink); }
         .ea-card h3 { font-size: 17px; letter-spacing: -.03em; margin-bottom: 8px; }
         .ea-card p { font: 13px/1.5 'Courier New', monospace; color: #555; margin: 0; }
         @media (max-width: 720px) {
