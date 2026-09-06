@@ -90,20 +90,18 @@ export default function Page() {
     {/* HERO */}
     <section id="top" className="hero shell">
       <div className="hero-copy">
-        <div className="status-wrap">
-          <div className="status"><CircleDot size={14} /> V1 Early Access <span>•</span> Spots Limited</div>
-          <PencilLoop />
-        </div>
-        <div className="relative pt-6 sm:pt-7">
-          {/* Jarvis note cleanly above 'closest' */}
-          <div className="pointer-events-none absolute top-0 left-2 sm:left-36 z-20 flex flex-col items-start font-mono text-[11px] sm:text-xs font-bold text-[var(--red)] rotate-[-2deg] select-none">
-            <span className="tracking-normal whitespace-nowrap">
-              (go google Jarvis, you not-so-man-of-culture... probably watch DC smh T_T)
-            </span>
-            {/* Arrow crossing down over text towards Iron Man's */}
+        <div className="relative">
+          <div className="status-wrap">
+            <div className="status"><CircleDot size={14} /> V1 Early Access <span>•</span> Spots Limited</div>
+            <PencilLoop />
+          </div>
+
+          {/* Red Jarvis note floating in the open space to the right, completely clear of the lasso */}
+          <div className="pointer-events-none sm:absolute sm:top-1 sm:left-[280px] md:left-[300px] z-20 flex items-center gap-1.5 font-mono text-[11px] sm:text-xs font-bold text-[var(--red)] rotate-[-1.5deg] select-none mt-2 sm:mt-0">
+            <span>(go google Jarvis, you not-so-man-of-culture... probably watch DC smh T_T)</span>
             <svg 
-              className="w-16 h-14 text-[var(--red)] -mt-1 ml-28 sm:ml-36 overflow-visible" 
-              viewBox="0 0 70 60" 
+              className="w-7 h-7 sm:w-8 sm:h-8 text-[var(--red)] sm:-mb-2 overflow-visible flex-shrink-0" 
+              viewBox="0 0 50 50" 
               fill="none" 
               stroke="currentColor" 
               strokeWidth="2.4" 
@@ -111,13 +109,13 @@ export default function Page() {
               strokeLinejoin="round" 
               aria-hidden="true"
             >
-              <path d="M50 4 C40 22, 28 38, 12 52" />
-              <path d="M22 51 L11 53 L13 41" />
+              <path d="M8 8 C18 16, 26 26, 28 40" />
+              <path d="M18 36 L28 42 L34 32" />
             </svg>
           </div>
 
           <h1>
-            MYLO: The closest thing to Iron Man&apos;s suit.
+            MYLO: The closest thing to Iron Man&apos;s Jarvis.
             <br />
             <span className="text-[var(--blue)] block mt-2 text-[0.65em] font-normal tracking-tight">
               The AI that actually runs your... well, everything.
