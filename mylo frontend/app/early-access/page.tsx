@@ -57,6 +57,9 @@ export default function EarlyAccessPage() {
       <div className="ea-shell shell">
         <div style={{ position: 'relative', display: 'inline-block' }}>
           <div className="ea-badge">
+            <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" style={{ color: 'var(--blue)', zIndex: -1 }}>
+              <path d="M5 49 C5 18 25 5 53 7 C83 4 97 22 95 52 C98 81 77 96 48 94 C17 97 2 79 5 49Z" fill="none" stroke="currentColor" strokeWidth="1.5" strokeDasharray="6 3 14 4" strokeLinecap="round" />
+            </svg>
             <CircleDot size={13}/> V1 EARLY ACCESS <span>•</span> Limited Spots
           </div>
           <div style={{
@@ -171,7 +174,7 @@ export default function EarlyAccessPage() {
       <style>{`
         .ea-page { min-height: 100vh; }
         .ea-shell { padding: 60px 0 100px; }
-        .ea-badge { display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; background: var(--yellow); border: 2px solid var(--ink); border-radius: 40px 30px 44px 36px; font: bold 11px 'Courier New', monospace; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 28px; }
+        .ea-badge { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 18px; font: bold 11px 'Courier New', monospace; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 28px; position: relative; z-index: 1; }
         .ea-badge span { color: var(--red); }
         .ea-title { font-size: clamp(38px, 5vw, 68px); line-height: 1; letter-spacing: -.065em; max-width: 720px; margin-bottom: 22px; }
         .ea-title em { font-style: normal; text-decoration: underline wavy var(--blue) 3px; text-decoration-skip-ink: none; }
