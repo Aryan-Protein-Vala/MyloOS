@@ -55,8 +55,27 @@ export default function EarlyAccessPage() {
       </nav>
 
       <div className="ea-shell shell">
-        <div className="ea-badge">
-          <CircleDot size={13}/> V1 EARLY ACCESS <span>•</span> Limited Spots
+        <div style={{ position: 'relative', display: 'inline-block' }}>
+          <div className="ea-badge">
+            <CircleDot size={13}/> V1 EARLY ACCESS <span>•</span> Limited Spots
+          </div>
+          <div style={{
+            position: 'absolute',
+            left: '100%',
+            top: '0',
+            width: '220px',
+            color: 'var(--red)',
+            font: '11px "Courier New", monospace',
+            transform: 'rotate(4deg)',
+            pointerEvents: 'none',
+            marginLeft: '10px'
+          }}>
+            <svg viewBox="0 0 50 30" style={{ width: '40px', height: '24px', position: 'absolute', left: '-42px', top: '0px', stroke: 'var(--red)', fill: 'none', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round' }}>
+              <path d="M40 15 Q 20 5 5 15" />
+              <path d="M12 7 L 5 15 L 15 20" />
+            </svg>
+            This wonky shape is a deliberate stylistic choice, I didn't f*ck up the CSS. Keep your eyes on the form.
+          </div>
         </div>
 
         <h1 className="ea-title">
