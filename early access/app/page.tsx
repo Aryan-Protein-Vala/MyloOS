@@ -1,0 +1,125 @@
+'use client'
+
+import { useState } from 'react'
+import { ArrowDownRight, ArrowRight, Check, ChevronDown, CircleDot, Code2, Download, Eye, EyeOff, GitBranch, GraduationCap, LockKeyhole, Menu, Mic2, Monitor, MousePointer2, Play, ShieldCheck, Sparkles, Terminal, Tv, Video, X } from 'lucide-react'
+import Link from 'next/link'
+
+const modes = {
+  coach: { label: 'COACH MODE', title: 'Learn by doing, not watching.', copy: 'MYLO sees your screen and gently guides you through the exact next move.', color: 'yellow', icon: Sparkles },
+  do: { label: 'DO MODE', title: 'Make the boring bits disappear.', copy: 'Give MYLO a task. It moves a ghost cursor, pauses at safety gates, and lets you approve every action.', color: 'blue', icon: MousePointer2 },
+  ask: { label: 'ASK MODE', title: 'Answers, right where you need them.', copy: 'Highlight an error, graph, or confusing UI. Press Alt + Space and get a useful explanation without leaving your flow.', color: 'green', icon: Mic2 },
+} as const
+
+type Mode = keyof typeof modes
+
+function RoughCircle({ className = '' }: { className?: string }) {
+  return <svg className={`pointer-events-none absolute inset-0 h-full w-full ${className}`} viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><path d="M5 49 C5 18 25 5 53 7 C83 4 97 22 95 52 C98 81 77 96 48 94 C17 97 2 79 5 49Z" fill="none" stroke="currentColor" strokeWidth="1.4" strokeDasharray="5 2 12 3" strokeLinecap="round" /></svg>
+}
+function RoughArrow() { return <svg className="scribble-arrow absolute" viewBox="0 0 180 100" aria-hidden="true"><path d="M8 15 C74 12 112 30 136 73" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /><path d="M119 70 L137 76 L137 56" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg> }
+function PencilLoop() { return <svg className="pencil-loop" viewBox="0 0 520 125" preserveAspectRatio="none" aria-hidden="true"><path d="M62 24 C174 45 330 43 443 62 C492 70 493 91 447 103 C345 128 170 119 78 99 C37 90 34 67 62 49 C111 18 191 10 284 8" fill="none" stroke="currentColor" strokeWidth="2.7" strokeLinecap="round" strokeLinejoin="round"/><path d="M62 25 C168 47 328 44 441 63" fill="none" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" opacity=".55"/></svg> }
+function SectionTitle({ eyebrow, title, children }: { eyebrow: string; title: string; children?: React.ReactNode }) { return <div className="section-heading"><span className="eyebrow">{eyebrow}</span><h2>{title}</h2>{children}</div> }
+
+export default function Page() {
+  const [mode, setMode] = useState<Mode>('coach')
+  const [openFaq, setOpenFaq] = useState<number | null>(0)
+  const [platform, setPlatform] = useState<'mac' | 'linux' | null>(null)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const ActiveIcon = modes[mode].icon
+  const showComingSoon = (target: 'mac' | 'linux') => {
+    setPlatform(target)
+    setMenuOpen(false)
+  }
+  return <main>
+    <nav className="nav shell">
+      <a href="#top" className="brand" onClick={() => setMenuOpen(false)}>
+        <span className="brand-mark">✳</span>
+        <span><strong>MYLO</strong><small>[os-native engine]</small></span>
+      </a>
+      <div className="nav-links">
+        <a href="#modes">Modes</a>
+        <a href="#privacy">Stealth</a>
+        <a href="#architecture">Architecture</a>
+        <a href="#pricing">Pricing</a>
+      </div>
+      <div className="nav-actions">
+        <a href="#pricing" className="sketch-button nav-download">
+          <Download size={15}/> Join Early Access <small>(v1.0)</small>
+        </a>
+        <button className="platform-trigger" onClick={() => showComingSoon('mac')} aria-label="See macOS availability">
+          <img src="https://thesvg.org/icons/apple/mono.svg" alt="" />
+        </button>
+        <button className="platform-trigger" onClick={() => showComingSoon('linux')} aria-label="See Linux availability">
+          <img src="https://thesvg.org/icons/linux/mono.svg" alt="" />
+        </button>
+      </div>
+      <button 
+        className={`mobile-menu ${menuOpen ? 'active' : ''}`} 
+        onClick={() => setMenuOpen(!menuOpen)} 
+        aria-label={menuOpen ? "Close navigation" : "Open navigation"}
+        aria-expanded={menuOpen}
+      >
+        {menuOpen ? <X size={20}/> : <Menu size={20}/>}
+      </button>
+
+      {menuOpen && (
+        <div className="mobile-nav-drawer">
+          <div className="mobile-nav-links">
+            <a href="#modes" onClick={() => setMenuOpen(false)}>
+              <span>01. Modes</span> <ArrowRight size={14}/>
+            </a>
+            <a href="#privacy" onClick={() => setMenuOpen(false)}>
+              <span>02. Stealth Mode</span> <ArrowRight size={14}/>
+            </a>
+            <a href="#architecture" onClick={() => setMenuOpen(false)}>
+              <span>03. Architecture</span> <ArrowRight size={14}/>
+            </a>
+            <a href="#pricing" onClick={() => setMenuOpen(false)}>
+              <span>04. Pricing</span> <ArrowRight size={14}/>
+            </a>
+            <Link href="/contact" onClick={() => setMenuOpen(false)}>
+              <span>05. Contact Us</span> <ArrowRight size={14}/>
+            </Link>
+          </div>
+          <div className="mobile-nav-actions">
+            <a href="#pricing" className="sketch-button" onClick={() => setMenuOpen(false)}>
+              <Download size={15}/> Join Early Access (v1.0)
+            </a>
+            <div className="mobile-nav-platforms">
+              <button className="mobile-nav-platform-btn" onClick={() => showComingSoon('mac')}>
+                <img src="https://thesvg.org/icons/apple/mono.svg" alt="" /> macOS (Soon)
+              </button>
+              <button className="mobile-nav-platform-btn" onClick={() => showComingSoon('linux')}>
+                <img src="https://thesvg.org/icons/linux/mono.svg" alt="" /> Linux (Soon)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </nav>
+    {menuOpen && <div className="mobile-nav-backdrop" onClick={() => setMenuOpen(false)} />}
+
+    <section id="top" className="hero shell"><div className="hero-copy"><div className="status-wrap"><div className="status"><CircleDot size={14}/> Early Access Waitlist <span>•</span> Mac & Windows</div><PencilLoop/></div><h1>MYLO : Your Mini-Jarvis. <em>The AI that takes the wheel.</em></h1><p className="lede">Hold the hotkey and speak. MYLO takes over your screen, driving a ghost cursor to execute tasks across any app—from editing videos to coding. An OS-native agentic loop that <strong>moves, clicks, and thinks for you.</strong></p><div className="cta-row"><a href="#pricing" className="ink-button">Request Early Access <span>(Spots Limited)</span><ArrowRight size={17}/></a><a href="#architecture" className="paper-button">See how it works</a></div><div className="hero-note"><RoughArrow/><span>your personal jarvis</span></div></div>
+      <DesktopMockup /></section>
+
+    <section id="modes" className="section shell"><SectionTitle eyebrow="three ways to work" title="MYLO stays out of the way. Until you need it."><p>One shortcut. Three superpowers. Zero context switching.</p></SectionTitle><div className="mode-tabs" role="tablist" aria-label="MYLO modes">{Object.entries(modes).map(([key, item]) => <button key={key} role="tab" aria-selected={mode === key} className={`mode-tab ${mode === key ? 'active' : ''} ${item.color}`} onClick={() => setMode(key as Mode)}><item.icon size={18}/><span>{item.label}</span></button>)}</div><div className={`mode-panel ${modes[mode].color}`}><div className="mode-text"><span className="eyebrow">{modes[mode].label}</span><h3>{modes[mode].title}</h3><p>{modes[mode].copy}</p><ul><li><Check size={16}/> Wobbly, human-feeling overlays</li><li><Check size={16}/> Real-time vision, no screenshots saved</li><li><Check size={16}/> Always asks before it acts</li></ul></div><div className="mode-preview"><div className="preview-top"><span/><span/><span/> <small>MYLO / {modes[mode].label}</small></div><div className="preview-body">{mode === 'coach' && <><div className="fake-toolbar"><Code2 size={16}/> untitled.blend <span>•••</span></div><div className="fake-lines"><i/><i/><i className="short"/><i/><i className="medium"/></div><div className="coach-callout"><b>1</b> Select the object first<RoughCircle/></div><div className="cursor-hand">⌁</div></>}{mode === 'do' && <><div className="task-card"><MousePointer2 size={19}/><b>Rename 12 project files</b><small>MYLO is ready to help</small><button className="mini-approve">Approve <ArrowRight size={13}/></button></div><div className="ghost-cursor"><MousePointer2 size={26}/><span>safe checkpoint</span></div></>}{mode === 'ask' && <><div className="terminal-window"><Terminal size={16}/><span>build.log</span><p>ERROR: module not found<br/><strong>› what does this mean?</strong></p></div><div className="ask-card"><div className="audio"><span/><span/><span/><span/><span/><span/><span/><span/></div><b>Looks like a missing dependency.</b><p>Try installing the package, then run the build again.</p></div></>}</div></div></div></section>
+
+    <section id="privacy" className="stealth-section"><div className="stealth-bg"/><div className="shell stealth-shell"><div className="stealth-badge"><EyeOff size={16}/> STEALTH MODE</div><h2 className="stealth-headline">Invisible to everyone<br/><em>but you.</em></h2><p className="stealth-sub">Zoom calls. OBS streams. Discord screenshares. Online meetings. MYLO&apos;s overlay uses OS-native capture exclusion — <strong>WDA_EXCLUDEFROMCAPTURE</strong> on Windows, <strong>NSWindow.sharingType</strong> on macOS — making it physically impossible for other apps to capture MYLO&apos;s pixels. Your AI assistant is there. Nobody else knows.</p><div className="stealth-toggle-note"><ShieldCheck size={16}/> Toggle visibility anytime in Settings. You&apos;re always in control.</div><StealthDemo/><div className="stealth-audience"><AudienceCard icon={<Video size={22}/>} label="Streamers" desc="Go live on Twitch with real-time AI coaching. Your viewers see gameplay, you see step-by-step guidance."/><AudienceCard icon={<Tv size={22}/>} label="Remote Workers" desc="Use MYLO during Zoom meetings to get instant context and smart replies. Nobody on the call sees a thing."/><AudienceCard icon={<GraduationCap size={22}/>} label="Students" desc="Research papers, debug code, and learn new concepts with an always-on AI study buddy that never clutters your screen."/><AudienceCard icon={<Play size={22}/>} label="YouTubers" desc="Record tutorials with a hidden teleprompter and research assistant. Clean footage, every time."/></div><div className="stealth-specs"><div><strong>0 pixels leaked</strong><span>Excluded at the OS compositor level — DirectX on Windows, Core Graphics on Mac.</span></div><div><strong>ESC × 2 = gone</strong><span>Double-tap Escape to instantly kill all overlays and input handles.</span></div><div><strong>No screenshots saved</strong><span>Frames are processed in volatile GPU memory. Nothing hits disk.</span></div></div></div></section>
+
+    <section id="architecture" className="section ruled-section"><div className="shell"><SectionTitle eyebrow="under the hood" title="Native speed. Human-scale design."><p>We built MYLO close to the metal so your workflow can stay wonderfully messy.</p></SectionTitle><div className="spec-grid"><Spec icon={<Monitor/>} stat="0.02s" title="Capture latency" copy="Windows Graphics Capture + DirectX 11 in raw Rust."/><Spec icon={<Sparkles/>} stat="~35MB" title="RAM usage" copy="A lightweight Tauri shell that leaves memory for your actual work."/><Spec icon={<LockKeyhole/>} stat="WDA" title="Exclusion layer" copy="Overlays stay invisible to screen recorders, Discord, and OBS."/><Spec icon={<ShieldCheck/>} stat="0 warnings" title="Install friction" copy="MSIX package auto-signed and approved by Microsoft Store."/></div></div></section>
+
+    <section id="pricing" className="section shell"><SectionTitle eyebrow="simple, honest pricing" title="Bring your key. Or bring your coffee."><p>Start free. Upgrade when you want the magic handled for you.</p></SectionTitle><div className="pricing-grid"><PriceCard free title="Free Forever" price="$0" suffix="/ month" badge="Zero Markup • 100% Private" items={['Paste your own Gemini or OpenAI API key','Unlimited Coach, Do, and Ask sessions','Local wake word & on-device OCR','All desktop overlay features','Direct machine-to-API connection']} cta="Download Free .MSIX"/><PriceCard title="Pro Managed" price="$15" suffix="/ month" badge="Most Popular • Zero Setup" items={['No API keys required — we handle token costs','Gemini Live & GPT-4o Realtime voice streaming','Unlimited Ask + 250 Coach/Do sessions monthly','Early access to Mac universal build','Priority cloud agent features']} cta="Start 7-Day Free Trial"/></div></section>
+
+    <section className="section shell faq-section"><SectionTitle eyebrow="you asked, we scribbled" title="Frequently asked questions."/><div className="faq-list">{[['Will MYLO slow down my games or apps?', 'Nope. MYLO runs as a lightweight Tauri shell (~35MB RAM) and uses Windows Graphics Capture — the same API used by Xbox Game Bar. It adds under 1ms of overlay latency and is specifically designed to stay invisible to performance counters.'],['Can my stream audience or Zoom call see MYLO\'s overlays?', 'No — and this is by design. MYLO uses OS-native capture exclusion: WDA_EXCLUDEFROMCAPTURE on Windows and NSWindow.sharingType on macOS. It\'s not an app-layer trick; the pixels literally never exist in the capture buffer. OBS, Zoom, Discord, Teams — none of them can pick it up.'],['Can MYLO do things on my computer without my permission?', 'Never. In Do Mode, MYLO always pauses at "safety gates" before executing any action and shows you exactly what it\'s about to do. You approve every step. Press ESC twice at any point to instantly kill all overlays and drop every input handle.'],['Which AI models does MYLO work with?', 'In the free BYOK tier, you can plug in your own Gemini or OpenAI API key and MYLO connects directly to it — no middleman, zero markup on tokens. The Pro tier includes managed access to Gemini Live and GPT-4o Realtime for voice streaming, so you don\'t need a key at all.'],['Is MYLO just for Windows? When does Mac come out?', 'Right now MYLO ships as a signed MSIX on Windows (v0.9 Beta, Microsoft Store approved). The universal Mac build is actively in progress. Pro subscribers get early access the moment it drops. Linux is on the roadmap after Mac.']].map(([q, a], i) => <div className="faq-item" key={q}><button onClick={() => setOpenFaq(openFaq === i ? null : i)} aria-expanded={openFaq === i}><span>{q}</span><ChevronDown size={19}/></button>{openFaq === i && <p>{a}</p>}</div>)}</div></section>
+
+    {platform && <div className="platform-modal-backdrop" role="presentation" onClick={() => setPlatform(null)}><section className="platform-modal" role="dialog" aria-modal="true" aria-labelledby="platform-title" onClick={event => event.stopPropagation()}><button className="modal-close" onClick={() => setPlatform(null)} aria-label="Close dialog"><X size={18}/></button><div className="modal-icon"><img src={platform === 'mac' ? 'https://thesvg.org/icons/apple/mono.svg' : 'https://thesvg.org/icons/linux/mono.svg'} alt="" /></div><span className="eyebrow">{platform === 'mac' ? 'macOS universal build' : 'Linux desktop build'}</span><h2 id="platform-title">Coming soon, {platform === 'mac' ? 'Mac friends' : 'penguins'}.</h2><p>We&apos;re polishing the native build now. Join the list and we&apos;ll let you know the moment MYLO is ready for your desktop.</p><a className="ink-button" href="mailto:hello@aria.example?subject=MYLO%20platform%20updates" onClick={() => setPlatform(null)}>Keep me posted <ArrowRight size={16}/></a><small className="modal-note">Windows is live today. Same scribbles, new machine.</small></section></div>}
+
+    <footer className="footer shell"><div className="brand"><span className="brand-mark">✳</span><span><strong>MYLO</strong><small>[os-native engine]</small></span></div><div className="footer-links"><a href="https://github.com/Aryan-Protein-Vala/MyloOS" target="_blank" rel="noopener noreferrer">GitHub <GitBranch size={15}/></a><Link href="/contact">Contact Us <ArrowUpRight size={15}/></Link><a href="/privacy">Privacy Policy</a><a href="/terms">Terms</a></div><div className="platforms"><span><i className="live"/> Windows: LIVE</span><span><i/> macOS: IN PROGRESS</span></div><p className="copyright">© 2026 MYLO. Made for curious humans.</p></footer>
+  </main>
+}
+
+function DesktopMockup() { return <div className="desktop-mockup"><div className="window-bar"><span className="window-title"><CircleDot size={12}/> MYLO / coach overlay</span><span>— □ ×</span></div><div className="desktop-content"><aside><span className="side-active">⌂</span><span>◫</span><span>◌</span><span>⚙</span></aside><div className="editor"><div className="editor-menu">File　 Edit　 View　 Export　 Help</div><div className="editor-stage"><div className="stage-shape"/><div className="stage-shape small"/><span className="stage-label">composition_04</span><div className="target-button">③ Click Export<RoughCircle/></div><RoughArrow/><div className="spotlight"/><div className="speech"><b>MYLO says:</b><br/>I&apos;ll watch you click this step before we move to step 4!</div><div className="avatar">✳</div></div><div className="editor-footer">● 00:12:48　　▶ timeline　　▰ export settings</div></div></div><div className="mock-caption"><span>live screen context</span><span><CircleDot size={12}/> recording locally</span></div></div> }
+function StealthDemo() { return <div className="stealth-demo"><div className="stealth-pane them"><div className="pane-label"><EyeOff size={14}/> What Zoom / OBS sees</div><div className="pane-screen"><div className="pane-bar"><span/><span/><span/><small>presentation_final.pptx</small></div><div className="pane-body"><div className="pane-slide"><span className="slide-title">Q3 Revenue Report</span><div className="slide-chart"><i style={{height:'60%'}}/><i style={{height:'80%'}}/><i style={{height:'45%'}}/><i style={{height:'90%'}}/><i style={{height:'70%'}}/></div></div></div><div className="clean-badge"><Check size={13}/> Clean screen — no AI visible</div></div></div><div className="stealth-vs"><span>VS</span></div><div className="stealth-pane you"><div className="pane-label"><Eye size={14}/> What you actually see</div><div className="pane-screen"><div className="pane-bar"><span/><span/><span/><small>presentation_final.pptx</small></div><div className="pane-body"><div className="pane-slide"><span className="slide-title">Q3 Revenue Report</span><div className="slide-chart"><i style={{height:'60%'}}/><i style={{height:'80%'}}/><i style={{height:'45%'}}/><i style={{height:'90%'}}/><i style={{height:'70%'}}/></div></div><div className="mylo-overlay-card"><div className="overlay-dot">✳</div><b>MYLO whispers:</b><p>&quot;Revenue is up 23% — mention the APAC expansion as the driver.&quot;</p></div><div className="mylo-overlay-hint"><span>③ Next slide: cost breakdown</span><RoughCircle className="hint-circle"/></div></div></div></div></div> }
+function AudienceCard({ icon, label, desc }: { icon: React.ReactNode; label: string; desc: string }) { return <article className="audience-card"><div className="audience-icon">{icon}</div><h4>{label}</h4><p>{desc}</p></article> }
+function Spec({ icon, stat, title, copy }: { icon: React.ReactNode; stat: string; title: string; copy: string }) { return <article className="spec-card"><div className="spec-icon">{icon}</div><strong>{stat}</strong><h3>{title}</h3><p>{copy}</p></article> }
+function PriceCard({ free, title, price, suffix, badge, items, cta }: { free?: boolean; title: string; price: string; suffix: string; badge: string; items: string[]; cta: string }) { return <article className={`price-card ${free ? 'free' : 'pro'}`}><div className="price-head"><span className="eyebrow">{title}</span><span className="price-badge">{badge}</span><div><strong>{price}</strong><span>{suffix}</span></div>{!free && <small>or $144 / year</small>}</div><ul>{items.map(item => <li key={item}><Check size={16}/>{item}</li>)}</ul><a href="#top" className={free ? 'paper-button' : 'ink-button'}>{cta}<ArrowRight size={16}/></a></article> }
+function ArrowUpRight({ size }: { size: number }) { return <ArrowDownRight size={size} className="up-right"/> }
