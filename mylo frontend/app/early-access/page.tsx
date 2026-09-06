@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { ArrowLeft, ArrowRight, CircleDot, Sparkles, MousePointer2, EyeOff, Key } from 'lucide-react'
+import { ArrowLeft, ArrowRight, CircleDot, Zap, Network, MousePointer2, EyeOff, Key } from 'lucide-react'
 import Link from 'next/link'
 
 export default function EarlyAccessPage() {
@@ -116,7 +116,7 @@ export default function EarlyAccessPage() {
             {error && <p className="ea-error">{error}</p>}
 
             <button type="submit" className="ink-button ea-submit" disabled={submitting}>
-              {submitting ? 'Sending you in…' : <><Sparkles size={16}/> Lock In My Spot <ArrowRight size={16}/></>}
+              {submitting ? 'Sending you in…' : <><Zap size={16}/> Lock In My Spot <ArrowRight size={16}/></>}
             </button>
 
             <p className="ea-fine-print">
@@ -131,7 +131,7 @@ export default function EarlyAccessPage() {
               <p>MYLO takes control of your mouse and keyboard to run tasks across any app. You watch. It works.</p>
             </div>
             <div className="ea-card purple">
-              <span className="ea-card-icon"><Sparkles size={26} strokeWidth={1.5} /></span>
+              <span className="ea-card-icon"><Network size={26} strokeWidth={1.5} /></span>
               <h3>Cortex Memory</h3>
               <p>Remembers your projects, preferences, and past chats. Every AI you use shares the same brain — yours.</p>
             </div>

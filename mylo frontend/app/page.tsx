@@ -1,12 +1,12 @@
 'use client'
 
 import { useState } from 'react'
-import { ArrowRight, Check, ChevronDown, CircleDot, Eye, EyeOff, GitBranch, GraduationCap, LockKeyhole, Menu, Monitor, MousePointer2, Play, ShieldCheck, Sparkles, Terminal, Tv, Video, X, ArrowDownRight } from 'lucide-react'
+import { ArrowRight, Check, ChevronDown, CircleDot, Eye, EyeOff, GitBranch, GraduationCap, LockKeyhole, Menu, Monitor, MousePointer2, Play, ShieldCheck, Network, Zap, Cpu, Terminal, Tv, Video, X, ArrowDownRight } from 'lucide-react'
 import Link from 'next/link'
 
 const modes = {
   yoink: { label: 'OS TAKEOVER (YOINK)', title: 'We don\'t just point. We literally click.', copy: 'Speak the task, step back, and watch the ghost cursor hijack your IDE, browser, or video editor and actually do the grunt work. No screenshots. No hallucinations. Just results.', color: 'blue', icon: MousePointer2 },
-  cortex: { label: 'CORTEX', title: 'An AI that actually knows you.', copy: 'Your messy code, your weird project names, that chat you had three days ago—remembered. Every session gets smarter. It stops being a tool and starts being a teammate.', color: 'purple', icon: Sparkles },
+  cortex: { label: 'CORTEX', title: 'An AI that actually knows you.', copy: 'Your messy code, your weird project names, that chat you had three days ago—remembered. Every session gets smarter. It stops being a tool and starts being a teammate.', color: 'purple', icon: Network },
   orchestrator: { label: 'BACKGROUND AGENT', title: 'Because you have a life.', copy: 'Tell MYLO to go scrape 200 competitors, pull leads, or research something deep. Then go touch grass. It handles it quietly in the background and pings you when done.', color: 'green', icon: Terminal },
 } as const
 
@@ -54,7 +54,7 @@ export default function Page() {
       </div>
       <div className="nav-actions">
         <Link href="/early-access" className="sketch-button nav-download">
-          <Sparkles size={15}/> V1 Early Access
+          <Zap size={15}/> V1 Early Access
         </Link>
       </div>
       <button
@@ -76,7 +76,7 @@ export default function Page() {
           </div>
           <div className="mobile-nav-actions">
             <Link href="/early-access" className="sketch-button" onClick={() => setMenuOpen(false)}>
-              <Sparkles size={15}/> Get V1 Early Access
+              <Zap size={15}/> Get V1 Early Access
             </Link>
           </div>
         </div>
@@ -129,7 +129,7 @@ export default function Page() {
           <div className="preview-top"><span/><span/><span/> <small>MYLO / {modes[mode].label}</small></div>
           <div className="preview-body">
             {mode === 'yoink' && <><div className="task-card"><MousePointer2 size={19}/><b>Rename 12 project files</b><small>MYLO is on standby</small><button className="mini-approve">Approve <ArrowRight size={13}/></button></div><div className="ghost-cursor"><MousePointer2 size={26}/><span>safe checkpoint</span></div></>}
-            {mode === 'cortex' && <><div className="fake-toolbar"><Sparkles size={16}/> cortex_memory.bin <span>•••</span></div><div className="fake-lines"><i/><i/><i className="short"/><i/><i className="medium"/></div><div className="coach-callout"><b>Linked</b> Remembered your messy React structure<RoughCircle/></div></>}
+            {mode === 'cortex' && <><div className="fake-toolbar"><Network size={16}/> cortex_memory.bin <span>•••</span></div><div className="fake-lines"><i/><i/><i className="short"/><i/><i className="medium"/></div><div className="coach-callout"><b>Linked</b> Remembered your messy React structure<RoughCircle/></div></>}
             {mode === 'orchestrator' && <><div className="terminal-window"><Terminal size={16}/><span>background.log</span><p>SPAWNING: HTTP Agent...<br/><strong>› doing the boring stuff for you</strong></p></div><div className="ask-card"><div className="audio"><span/><span/><span/><span/><span/><span/><span/><span/></div><b>Done. Go check your CRM.</b><p>50 leads pulled while you were eating lunch. You&apos;re welcome.</p></div></>}
           </div>
         </div>
@@ -167,7 +167,7 @@ export default function Page() {
         </SectionTitle>
         <div className="spec-grid">
           <Spec icon={<Monitor/>} stat="0.02s" title="Capture latency" copy="Windows Graphics Capture + Core Graphics. Zero middlemen."/>
-          <Spec icon={<Sparkles/>} stat="~35MB" title="RAM usage" copy="A Tauri shell so light it&apos;s basically air. Your RAM is safe."/>
+          <Spec icon={<Cpu/>} stat="~35MB" title="RAM usage" copy="A Tauri shell so light it&apos;s basically air. Your RAM is safe."/>
           <Spec icon={<LockKeyhole/>} stat="WDA" title="Exclusion layer" copy="Screen recorders, Discord, OBS — none of them can see MYLO."/>
           <Spec icon={<ShieldCheck/>} stat="0 warnings" title="Install friction" copy="MSIX on Windows, universal binary on Mac. No scary prompts."/>
         </div>
