@@ -9,7 +9,7 @@ export default function ConfirmedPage() {
   useEffect(() => {
     const t = setTimeout(() => {
       window.location.href = '/'
-    }, 6000)
+    }, 8000)
     return () => clearTimeout(t)
   }, [])
 
@@ -29,11 +29,11 @@ export default function ConfirmedPage() {
           <em style={{ fontStyle: 'normal', textDecoration: 'underline wavy var(--blue) 3px', textDecorationSkipInk: 'none' }}>Welcome to the cult.</em>
         </h1>
 
-        <p style={{ fontSize: '17px', lineHeight: '1.6', color: '#555', marginBottom: '10px', fontFamily: 'Trebuchet MS, sans-serif' }}>
-          We&apos;ve got your email. You&apos;ll hear from us when your V1 Early Access slot opens — no spammy newsletters, no &quot;exciting announcements&quot;. Just the real thing.
+        <p style={{ fontSize: '16px', lineHeight: '1.6', color: '#444', marginBottom: '14px', fontFamily: 'Trebuchet MS, sans-serif' }}>
+          We didn&apos;t send you an automated confirmation email because spamming your inbox with &quot;thanks for signing up!&quot; is cringe.
         </p>
-        <p style={{ fontSize: '14px', lineHeight: '1.6', color: '#888', marginBottom: '36px', fontFamily: 'Courier New, monospace' }}>
-          Check your inbox — we just sent a confirmation. And yes, it&apos;s actually worth reading.
+        <p style={{ fontSize: '14px', lineHeight: '1.6', color: '#666', marginBottom: '36px', fontFamily: 'Courier New, monospace' }}>
+          We will only email you once when your actual V1 build is ready to download. Hands off the keyboard until then.
         </p>
 
         <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap', marginBottom: '28px' }}>
@@ -46,7 +46,7 @@ export default function ConfirmedPage() {
         </div>
 
         <p style={{ font: '11px Courier New, monospace', color: '#bbb' }}>
-          Auto-redirecting you back in 6 seconds…
+          Auto-redirecting you back in 8 seconds…
         </p>
       </div>
     </main>
