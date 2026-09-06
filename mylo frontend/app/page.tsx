@@ -94,14 +94,24 @@ export default function Page() {
           <div className="status"><CircleDot size={14} /> V1 Early Access <span>•</span> Spots Limited</div>
           <PencilLoop />
         </div>
-        <h1>MYLO: The closest thing to Iron Man&apos;s suit.<br /><span className="text-[var(--blue)] block mt-2 text-[0.65em] font-normal tracking-tight">The AI that actually runs everything.</span></h1>
-        <div className="flex items-center gap-2.5 mt-3 text-[var(--red)] font-mono text-xs font-bold rotate-[-1deg]">
-          <svg className="w-8 h-5 flex-shrink-0 text-[var(--red)]" viewBox="0 0 50 30" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M4 8 C18 6, 32 12, 42 22" />
-            <path d="M33 22 L42 23 L40 14" />
-          </svg>
-          <span>(go search Jarvis, you not-so-man-of-culture... probably watch DC smh)</span>
-        </div>
+        <h1 className="relative">
+          MYLO: The closest thing to{" "}
+          <span className="relative inline-block">
+            Iron Man&apos;s
+            <span className="pointer-events-none absolute -top-8 sm:-top-9 left-1 sm:-left-3 z-20 flex items-center gap-1.5 font-mono text-[10px] sm:text-xs font-bold text-[var(--red)] rotate-[-3deg] whitespace-nowrap select-none">
+              <svg className="w-5 h-4 sm:w-7 sm:h-5 flex-shrink-0 text-[var(--red)] rotate-[-15deg]" viewBox="0 0 45 35" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M8 28 C14 18, 22 10, 38 6" />
+                <path d="M28 5 L39 6 L36 16" />
+              </svg>
+              <span>(go google Jarvis, you not-so-man-of-culture... probably watch DC smh T_T)</span>
+            </span>
+          </span>{" "}
+          suit.
+          <br />
+          <span className="text-[var(--blue)] block mt-2 text-[0.65em] font-normal tracking-tight">
+            The AI that actually runs your... well, everything.
+          </span>
+        </h1>
         <p className="lede">Hold a hotkey, say the task out loud. MYLO hijacks your screen with a ghost cursor and just… does it. Powered by <CortexHover>Cortex</CortexHover>, it remembers everything—your projects, your preferences, your chaos. <strong>No corporate fluff. Just an AI that actually works.</strong></p>
         <div className="cta-row">
           <Link href="/early-access" className="ink-button">Get Early Access <ArrowRight size={16} /></Link>
