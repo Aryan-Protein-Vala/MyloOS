@@ -7,7 +7,7 @@ import Link from 'next/link'
 const modes = {
   yoink: { label: 'OS TAKEOVER (YOINK)', title: 'We don\'t just point. We literally click.', copy: 'Speak the task, step back, and watch the ghost cursor hijack your IDE, browser, or video editor and actually do the grunt work. No screenshots. No hallucinations. Just results.', color: 'blue', icon: MousePointer2 },
   cortex: { label: 'CORTEX', title: 'An AI that actually knows you.', copy: 'Your messy code, your weird project names, that chat you had three days ago—remembered. Every session gets smarter. It stops being a tool and starts being a teammate.', color: 'purple', icon: Network },
-  orchestrator: { label: 'BACKGROUND AGENT', title: 'Because you have a life.', copy: 'Tell MYLO to go scrape 200 competitors, pull leads, or research something deep. Then go touch grass. It handles it quietly in the background and pings you when done.', color: 'green', icon: Terminal },
+  orchestrator: { label: 'BACKGROUND AGENT', title: 'Because you have a life.', copy: 'Tell MYLO to scrape 200 competitors, post your content, market for you, or pull leads. No more messy n8n workflow type sh*t. It handles it quietly in the background and pings you when done.', color: 'green', icon: Terminal },
   v1: { label: 'THE KITCHEN SINK', title: 'Coach, Do, and Ask Mode.', copy: 'We didn\'t kill the V1 classics. Use ASK MODE for quick voice questions, COACH MODE when you actually want to learn how to do it yourself, and DO MODE when you want MYLO to take the wheel. All the OG goodness packed into one tab.', color: 'yellow', icon: Package },
 } as const
 
@@ -150,7 +150,7 @@ export default function Page() {
         <div className="stealth-audience">
           <AudienceCard icon={<Video size={22}/>} label="Streamers" desc="Live coaching on Twitch with MYLO whispering tactics. Your chat sees nothing. Your teammates are impressed."/>
           <AudienceCard icon={<Tv size={22}/>} label="Remote Workers" desc="MYLO sits in your Zoom calls, pulling context and drafting replies in real time. You just look really smart."/>
-          <AudienceCard icon={<GraduationCap size={22}/>} label="Students" desc="Debug code, write essays, understand confusing papers — with a study buddy that never shows up on the screen recording."/>
+          <AudienceCard icon={<GraduationCap size={22}/>} label="Students" desc="Debug code, write essays, understand confusing papers — with a study buddy that never shows up on the captures."/>
           <AudienceCard icon={<Play size={22}/>} label="YouTubers" desc="Record tutorials with a hidden teleprompter and instant research assistant. Clean footage, zero stress."/>
         </div>
         <div className="stealth-specs">
