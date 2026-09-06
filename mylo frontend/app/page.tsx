@@ -8,7 +8,7 @@ const modes = {
   yoink: { label: 'OS TAKEOVER (YOINK)', title: 'We don\'t just point. We literally click.', copy: 'Speak the task, step back, and watch the ghost cursor hijack your IDE, browser, or video editor and actually do the grunt work. No screenshots. No hallucinations. Just results.', color: 'blue', icon: MousePointer2 },
   cortex: { label: 'CORTEX', title: 'An AI that actually knows you.', copy: 'Your messy code, your weird project names, that chat you had three days ago—remembered. Every session gets smarter. It stops being a tool and starts being a teammate.', color: 'purple', icon: Network },
   orchestrator: { label: 'BACKGROUND AGENT', title: 'Because you have a life.', copy: 'Tell MYLO to scrape 200 competitors, post your content, market for you, or pull leads. No more messy n8n workflow type sh*t. It handles it quietly in the background and pings you when done.', color: 'green', icon: Terminal },
-  v1: { label: 'THE KITCHEN SINK', title: 'The OG features you didn\'t ask for but we delivered.', copy: 'We didn\'t kill the V1 classics. Use ASK MODE for quick voice questions, COACH MODE when you actually want to learn how to do it yourself, and DO MODE when you want MYLO to take the wheel. All the OG goodness packed into one tab.', color: 'yellow', icon: Package },
+  v1: { label: 'THE KITCHEN SINK', title: 'The OG features you didn\'t ask for but we delivered.', copy: 'We didn\'t kill the classics. Use ASK MODE for quick voice questions, COACH MODE when you actually want to learn how to do it yourself, and DO MODE when you want MYLO to take the wheel. All the OG goodness packed into one tab.', color: 'yellow', icon: Package },
 } as const
 
 type Mode = keyof typeof modes
@@ -132,11 +132,7 @@ export default function Page() {
             {mode === 'yoink' && <><div className="task-card"><MousePointer2 size={19}/><b>Rename 12 project files</b><small>MYLO is on standby</small><button className="mini-approve">Approve <ArrowRight size={13}/></button></div><div className="ghost-cursor"><MousePointer2 size={26}/><span>safe checkpoint</span></div></>}
             {mode === 'cortex' && <><div className="fake-toolbar"><Network size={16}/> cortex_memory.bin <span>•••</span></div><div className="fake-lines"><i/><i/><i className="short"/><i/><i className="medium"/></div><div className="coach-callout"><b>Linked</b> Remembered your messy React structure<RoughCircle/></div></>}
             {mode === 'orchestrator' && <><div className="terminal-window"><Terminal size={16}/><span>background.log</span><p>SPAWNING: HTTP Agent...<br/><strong>› doing the boring stuff for you</strong></p></div><div className="ask-card"><div className="audio"><span/><span/><span/><span/><span/><span/><span/><span/></div><b>Done. Go check your CRM.</b><p>50 leads pulled while you were eating lunch. You&apos;re welcome.</p></div></>}
-            {mode === 'v1' && <>
-              <div className="coach-callout" style={{ right: '15px', top: '50px', animation: 'v1-float1 4s ease-in-out infinite' }}><b>Coach Mode</b> <br/>Open Terminal, I&apos;ll walk you through the Git rebase.<RoughCircle/></div>
-              <div className="ask-card" style={{ top: '155px', left: '8%', animation: 'v1-float2 3.5s ease-in-out infinite reverse', zIndex: 5 }}><div className="audio"><span/><span/><span/><span/><span/><span/><span/><span/></div><b>Ask Mode</b><p>You asked: "What is this error?"</p></div>
-              <div className="task-card" style={{ top: '25px', left: '20%', animation: 'v1-float3 4.5s ease-in-out infinite', zIndex: 1, opacity: 0.85 }}><b>Do Mode</b><small>Taking over terminal...</small></div>
-            </>}
+            {mode === 'v1' && <><div className="coach-callout" style={{ right: '40px', top: '70px', transform: 'rotate(2deg)' }}><b>Coach Mode</b> <br/>Open Terminal, I&apos;ll walk you through the Git rebase.<RoughCircle/></div><div className="ask-card" style={{ top: '150px', left: '15%' }}><div className="audio"><span/><span/><span/><span/><span/><span/><span/><span/></div><b>Ask Mode</b><p>You asked: "What is this error?"</p></div></>}
           </div>
         </div>
       </div>
