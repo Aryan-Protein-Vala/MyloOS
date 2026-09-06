@@ -19,8 +19,10 @@ function CortexHover({ children }: { children: React.ReactNode }) {
       <span className="relative inline-block font-bold text-[var(--purple)]" style={{ textDecoration: 'underline wavy #8b5cf6 2px', textUnderlineOffset: '4px' }}>
         {children}
       </span>
-      <span className="pointer-events-none absolute bottom-full left-1/2 mb-3 w-72 -translate-x-1/2 rounded bg-[var(--ink)] p-3 text-xs text-[var(--paper)] opacity-0 transition-opacity group-hover:opacity-100 z-50 text-left font-mono shadow-[4px_4px_0_var(--purple)]">
-        Universal Cortex Web (UCW). An AI-agnostic memory protocol we built that extracts your context into a permanent SurrealDB knowledge graph, complete with human-like Ebbinghaus decay. Every AI you use taps into this exact same brain.
+      <span className="pointer-events-none absolute bottom-full left-1/2 mb-3 w-[340px] -translate-x-1/2 rounded bg-[var(--ink)] p-4 text-sm leading-relaxed text-[var(--paper)] opacity-0 transition-opacity group-hover:opacity-100 z-50 text-left font-mono shadow-[6px_6px_0_var(--purple)]">
+        <strong>Universal Cortex Web (UCW)</strong><br/><br/>
+        It's a shared memory + language layer so all your AIs can finally talk to each other without acting like dumb goldfishes.<br/><br/>
+        It runs on an Ebbinghaus decay curve (good luck pronouncing that shit) to forget the junk and remember what actually matters.
         <svg className="absolute top-full left-1/2 -ml-2 h-4 w-4 text-[var(--ink)]" viewBox="0 0 24 24" fill="currentColor">
           <path d="M12 21l-12-18h24z" />
         </svg>
