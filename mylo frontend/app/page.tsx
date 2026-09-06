@@ -150,7 +150,7 @@ export default function Page() {
         <div className="stealth-audience">
           <AudienceCard icon={<Video size={22}/>} label="Streamers" desc="Live coaching on Twitch with MYLO whispering tactics. Your chat sees nothing. Your teammates are impressed."/>
           <AudienceCard icon={<Tv size={22}/>} label="Remote Workers" desc="MYLO sits in your Zoom calls, pulling context and drafting replies in real time. You just look really smart."/>
-          <AudienceCard icon={<GraduationCap size={22}/>} label="Students" desc="Debug code, write essays, understand confusing papers — with a study buddy that never shows up on the captures."/>
+          <AudienceCard icon={<GraduationCap size={22}/>} label="Students" desc="Debug code, write essays, understand confusing papers — with a study buddy that never shows up on the screen capture."/>
           <AudienceCard icon={<Play size={22}/>} label="YouTubers" desc="Record tutorials with a hidden teleprompter and instant research assistant. Clean footage, zero stress."/>
         </div>
         <div className="stealth-specs">
