@@ -94,7 +94,7 @@ export default function Page() {
           <div className="status"><CircleDot size={14} /> V1 Early Access <span>•</span> Spots Limited</div>
           <PencilLoop />
         </div>
-        <h1>MYLO: The closest thing to Iron Man&apos;s suit.<br /><span className="text-[var(--blue)] block mt-2 text-[0.65em] font-normal tracking-tight">The AI that actually runs your computer.</span></h1>
+        <h1>MYLO: The closest thing to Iron Man&apos;s suit.<br /><span className="text-[var(--blue)] block mt-2 text-[0.65em] font-normal tracking-tight">The AI that actually runs everything.</span></h1>
         <div className="flex items-center gap-2.5 mt-3 text-[var(--red)] font-mono text-xs font-bold rotate-[-1deg]">
           <svg className="w-8 h-5 flex-shrink-0 text-[var(--red)]" viewBox="0 0 50 30" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M4 8 C18 6, 32 12, 42 22" />
