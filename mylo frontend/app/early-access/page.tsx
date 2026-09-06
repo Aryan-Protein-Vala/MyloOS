@@ -74,7 +74,7 @@ export default function EarlyAccessPage() {
               <input
                 id="ea-name"
                 type="text"
-                placeholder="Pupkin Sharma"
+                placeholder="Babu Rao Ganpatrao Apte"
                 value={name}
                 onChange={e => setName(e.target.value)}
                 required
@@ -86,7 +86,7 @@ export default function EarlyAccessPage() {
               <input
                 id="ea-email"
                 type="email"
-                placeholder="pupkin.sharma@nalla.com"
+                placeholder="baburao@startrack.in"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 required
@@ -128,22 +128,22 @@ export default function EarlyAccessPage() {
             <div className="ea-card">
               <span className="ea-card-icon"><MousePointer2 size={26} strokeWidth={1.5} /></span>
               <h3>Ghost Cursor Mode</h3>
-              <p>MYLO takes control of your mouse and keyboard to run tasks across any app. You watch. It works.</p>
+              <p>MYLO literally hijacks your mouse. You get to sit back, sip chai, and watch it do the grunt work like a boss.</p>
             </div>
             <div className="ea-card purple">
               <span className="ea-card-icon"><Network size={26} strokeWidth={1.5} /></span>
               <h3>Cortex Memory</h3>
-              <p>Remembers your projects, preferences, and past chats. Every AI you use shares the same brain — yours.</p>
+              <p>Remembers your messy codebase and weird variable names. Every AI you use shares this one gigabrain.</p>
             </div>
             <div className="ea-card green">
               <span className="ea-card-icon"><EyeOff size={26} strokeWidth={1.5} /></span>
               <h3>Stealth Overlay</h3>
-              <p>OS-level pixel exclusion. Your Zoom call sees nothing. You see everything. It&apos;s not magic, it&apos;s Rust.</p>
+              <p>OS-level pixel exclusion. Your boss on Zoom sees nothing. Look suspiciously productive while doing absolutely nothing.</p>
             </div>
             <div className="ea-card yellow">
               <span className="ea-card-icon"><Key size={26} strokeWidth={1.5} /></span>
               <h3>BYOK — Bring Your Own Key</h3>
-              <p>Free tier = your own API keys, zero markup. We connect directly. You pay the API. We charge nothing.</p>
+              <p>Bring your own API keys. We don't want your money for OpenAI's compute. You pay them directly, we stay broke.</p>
             </div>
           </div>
         </div>

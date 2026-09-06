@@ -39,7 +39,7 @@ export default function ContactPage() {
               id="name" 
               required 
               className="w-full border-2 border-[var(--ink)] rounded-md px-4 py-3 bg-[var(--paper)] focus:outline-none focus:ring-4 focus:ring-[var(--blue)] focus:border-transparent transition-all"
-              placeholder="Sharma ji's elder son (or pupkin sharma)"
+              placeholder="Sharma ji's elder son"
             />
           </div>
 
