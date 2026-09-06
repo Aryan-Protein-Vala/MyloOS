@@ -44,7 +44,8 @@ export default function OverlayPage() {
   // ── Agentic State Machine ──────────────────────────────────────────────────
   const [isPttPressed, setIsPttPressed] = useState(false)
   const [agentPhase, setAgentPhase] = useState<'idle' | 'listening' | 'thinking' | 'acting'>('idle')
-  const [agentCursor, setAgentCursor] = useState<{x: number, y: number} | null>(null)
+  const [agentCursor, setAgentCursor] = useState<{x: number | number[], y: number | number[]} | null>(null)
+  const lastCursorPos = useRef<{x: number, y: number} | null>(null)
   const [agentMessage, setAgentMessage] = useState<string | null>(null)
 
   // ── Stream safety ──────────────────────────────────────────────────────────
@@ -295,9 +296,45 @@ export default function OverlayPage() {
         // Animate Bezier cursor to target coordinate (scale physical pixels to CSS pixels)
         if (action.x != null && action.y != null) {
           const dpr = typeof window !== 'undefined' ? (window.devicePixelRatio || 1) : 1
-          const overlayX = (action.x - rect.x) / dpr
-          const overlayY = (action.y - rect.y) / dpr
-          setAgentCursor({ x: overlayX, y: overlayY })
+          const targetX = (action.x - rect.x) / dpr
+          const targetY = (action.y - rect.y) / dpr
+          
+          let startX = width / 2
+          let startY = height - 100
+          if (lastCursorPos.current) {
+            startX = lastCursorPos.current.x
+            startY = lastCursorPos.current.y
+          }
+
+          // Generate quadratic Bezier path
+          const midX = (startX + targetX) / 2
+          const midY = (startY + targetY) / 2
+          const dx = targetX - startX
+          const dy = targetY - startY
+          const dist = Math.hypot(dx, dy)
+
+          // Clamp curvature so cursor doesn't fly off screen on large displays
+          const curvature = Math.min(100, Math.max(15, dist * 0.2))
+          const nx = dist > 0 ? -dy / dist : 0
+          const ny = dist > 0 ? dx / dist : 0
+
+          // Control point offset perpendicular to the line
+          const cpX = midX + nx * curvature
+          const cpY = midY + ny * curvature
+
+          const pathX = []
+          const pathY = []
+          for (let i = 0; i <= 20; i++) {
+            const t = i / 20
+            const x = (1-t)*(1-t)*startX + 2*(1-t)*t*cpX + t*t*targetX
+            const y = (1-t)*(1-t)*startY + 2*(1-t)*t*cpY + t*t*targetY
+            pathX.push(x)
+            pathY.push(y)
+          }
+
+          setAgentCursor({ x: pathX, y: pathY })
+          lastCursorPos.current = { x: targetX, y: targetY }
+
           // Allow flight animation to guide user eye before executing
           await new Promise((r) => setTimeout(r, 750))
         }
@@ -795,7 +832,7 @@ export default function OverlayPage() {
             animate={{ x: agentCursor.x, y: agentCursor.y }}
             transition={{
               type: "tween",
-              ease: [0.22, 1, 0.36, 1],
+              ease: "easeInOut",
               duration: 0.75,
             }}
             className="fixed z-[10003] pointer-events-none"

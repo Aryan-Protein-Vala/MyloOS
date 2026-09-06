@@ -451,6 +451,16 @@ pub fn execute_agentic_action(app_handle: AppHandle, action: DoAction) -> Result
         return Err("Action aborted: overlay is hidden or panic hotkey was pressed".to_string());
     }
 
+    // Programmatically arm and consume the rate-limiter guard
+    {
+        let mut guard = state
+            .actions
+            .lock()
+            .map_err(|_| "Action guard is poisoned".to_string())?;
+        guard.arm();
+        guard.try_consume()?;
+    }
+
     // Ensure overlay is set to click-through so the input hits the desktop app beneath
     if let Ok(window) = overlay(&app_handle) {
         let _ = window.set_ignore_cursor_events(true);
