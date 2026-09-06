@@ -20,7 +20,7 @@ function CortexHover({ children }: { children: React.ReactNode }) {
         {children}
       </span>
       <span className="pointer-events-none absolute bottom-full left-1/2 mb-3 w-72 -translate-x-1/2 rounded bg-[var(--ink)] p-3 text-xs text-[var(--paper)] opacity-0 transition-opacity group-hover:opacity-100 z-50 text-left font-mono shadow-[4px_4px_0_var(--purple)]">
-        Built by our other startup (we literally made a whole separate business for this). It's a semantic memory mesh that extracts reasoning and gist, so every AI you use shares the exact same gigabrain.
+        Universal Cortex Web (UCW). An AI-agnostic memory protocol we built that extracts your context into a permanent SurrealDB knowledge graph, complete with human-like Ebbinghaus decay. Every AI you use taps into this exact same brain.
         <svg className="absolute top-full left-1/2 -ml-2 h-4 w-4 text-[var(--ink)]" viewBox="0 0 24 24" fill="currentColor">
           <path d="M12 21l-12-18h24z" />
         </svg>
