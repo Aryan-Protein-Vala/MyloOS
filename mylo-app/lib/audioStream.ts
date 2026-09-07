@@ -4,11 +4,21 @@ let recordedChunks: Blob[] = [];
 let recordedMimeType = 'audio/webm';
 let currentAudioElement: HTMLAudioElement | null = null;
 let currentAudioUrl: string | null = null;
+let currentTtsRequestId = 0;
+let currentTtsAbortController: AbortController | null = null;
 
-function stopAndRevokeCurrentAudio() {
+export function stopAndRevokeCurrentAudio(): void {
+  currentTtsRequestId++;
+  if (currentTtsAbortController) {
+    try {
+      currentTtsAbortController.abort();
+    } catch {}
+    currentTtsAbortController = null;
+  }
   if (currentAudioElement) {
     try {
       currentAudioElement.pause();
+      currentAudioElement.src = '';
     } catch {}
     currentAudioElement = null;
   }
@@ -16,6 +26,32 @@ function stopAndRevokeCurrentAudio() {
     URL.revokeObjectURL(currentAudioUrl);
     currentAudioUrl = null;
   }
+}
+
+export function cancelRecording(): void {
+  if (activeRecorder) {
+    try {
+      activeRecorder.ondataavailable = null;
+      activeRecorder.onstop = null;
+      if (activeRecorder.state !== 'inactive') {
+        activeRecorder.stop();
+      }
+    } catch (e) {
+      console.warn("Error stopping activeRecorder during cancelRecording:", e);
+    }
+    activeRecorder = null;
+  }
+
+  if (activeStream) {
+    try {
+      activeStream.getTracks().forEach((track) => track.stop());
+    } catch (e) {
+      console.warn("Error stopping tracks during cancelRecording:", e);
+    }
+    activeStream = null;
+  }
+
+  recordedChunks = [];
 }
 
 export interface TranscriptionResult {
@@ -172,6 +208,10 @@ export async function playTTS(text: string, sarvamApiKey: string): Promise<void>
   // Stop and cleanup any ongoing speech
   stopAndRevokeCurrentAudio();
 
+  const requestId = currentTtsRequestId;
+  const abortController = new AbortController();
+  currentTtsAbortController = abortController;
+
   try {
     const response = await fetch('https://api.sarvam.ai/text-to-speech', {
       method: 'POST',
@@ -179,6 +219,7 @@ export async function playTTS(text: string, sarvamApiKey: string): Promise<void>
         'Content-Type': 'application/json',
         'api-subscription-key': sarvamApiKey.trim(),
       },
+      signal: abortController.signal,
       body: JSON.stringify({
         inputs: [text.trim()],
         target_language_code: 'en-IN',
@@ -190,12 +231,20 @@ export async function playTTS(text: string, sarvamApiKey: string): Promise<void>
       }),
     });
 
+    if (requestId !== currentTtsRequestId) {
+      return;
+    }
+
     if (!response.ok) {
       const errText = await response.text();
       throw new Error(`Sarvam API error ${response.status}: ${errText || response.statusText}`);
     }
 
     const data = (await response.json()) as { audios?: string[] };
+    if (requestId !== currentTtsRequestId) {
+      return;
+    }
+
     if (data.audios && data.audios.length > 0 && data.audios[0]) {
       const binaryString = atob(data.audios[0]);
       const len = binaryString.length;
@@ -204,18 +253,35 @@ export async function playTTS(text: string, sarvamApiKey: string): Promise<void>
         bytes[i] = binaryString.charCodeAt(i);
       }
 
+      if (requestId !== currentTtsRequestId) {
+        return;
+      }
+
       const blob = new Blob([bytes.buffer], { type: 'audio/wav' });
       const url = URL.createObjectURL(blob);
+
+      if (requestId !== currentTtsRequestId) {
+        URL.revokeObjectURL(url);
+        return;
+      }
+
       currentAudioUrl = url;
       const audio = new Audio(url);
       currentAudioElement = audio;
 
       const cleanup = () => {
-        stopAndRevokeCurrentAudio();
+        if (currentTtsRequestId === requestId) {
+          stopAndRevokeCurrentAudio();
+        }
       };
 
       audio.onended = cleanup;
       audio.onerror = cleanup;
+
+      if (requestId !== currentTtsRequestId) {
+        cleanup();
+        return;
+      }
 
       await audio.play().catch((playErr) => {
         console.warn("Audio playback blocked by autoplay policy:", playErr);
@@ -223,6 +289,13 @@ export async function playTTS(text: string, sarvamApiKey: string): Promise<void>
       });
     }
   } catch (err) {
+    if (err instanceof Error && err.name === 'AbortError') {
+      return;
+    }
     console.error("Error generating or playing TTS:", err);
+  } finally {
+    if (currentTtsAbortController === abortController) {
+      currentTtsAbortController = null;
+    }
   }
 }

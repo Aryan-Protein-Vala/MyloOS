@@ -81,7 +81,7 @@ impl ActionGuard {
         self.armed = false;
 
         let now = Instant::now();
-        self.recent.retain(|t| now.duration_since(*t) < RATE_WINDOW);
+        self.recent.retain(|t| now.checked_duration_since(*t).map_or(false, |d| d < RATE_WINDOW));
         if self.recent.len() >= RATE_LIMIT {
             return Err(format!(
                 "Too many actions ({RATE_LIMIT} in {}s). Slow down or restart MYLO.",
@@ -98,6 +98,7 @@ impl ActionGuard {
 pub struct AppState {
     pub mode: Mutex<OverlayMode>,
     pub actions: Mutex<ActionGuard>,
+    pub active_agents: Mutex<std::collections::HashMap<String, tokio::task::AbortHandle>>,
 }
 
 impl AppState {
@@ -150,5 +151,20 @@ mod tests {
         assert!(!OverlayMode::Hidden.is_visible());
         assert!(OverlayMode::Ask.is_visible());
         assert_eq!(OverlayMode::Do.as_str(), "do");
+    }
+
+    #[test]
+    fn clock_inversion_does_not_panic() {
+        let mut guard = ActionGuard::default();
+        // Insert a timestamp in the future to simulate clock rollback
+        guard.recent.push(Instant::now() + Duration::from_secs(60));
+        guard.arm();
+        assert!(guard.try_consume().is_ok());
+    }
+
+    #[test]
+    fn app_state_initializes_active_agents() {
+        let state = AppState::default();
+        assert!(state.active_agents.lock().unwrap().is_empty());
     }
 }

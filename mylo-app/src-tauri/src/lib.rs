@@ -7,6 +7,7 @@ pub mod screen_capture;
 pub mod input_injector;
 pub mod platform_macos;
 pub mod state;
+pub mod telemetry;
 
 use tauri::{Manager, menu::{MenuBuilder, MenuItemBuilder}, tray::TrayIconBuilder};
 
@@ -45,6 +46,11 @@ pub fn run() {
             ipc::analyze_for_do_mode,
             ipc::execute_agentic_action,
             ipc::execute_agentic_chain,
+            ipc::spawn_headless_agent,
+            ipc::kill_headless_agent,
+            ipc::check_permissions,
+            ipc::request_accessibility_permissions,
+            ipc::request_screen_recording_permissions,
         ])
         .setup(|app| {
             // ── Overlay window: make it click-through, topmost, and stream-safe ──
@@ -74,6 +80,9 @@ pub fn run() {
 
             // ── Register global hotkeys AFTER setup so the window handle exists ──
             hotkey::register_hotkeys(app.handle());
+
+            // ── Start Native OS Telemetry Loop ──
+            telemetry::start_telemetry(app.handle().clone());
 
             // ── System Tray ──
             let quit_item = MenuItemBuilder::with_id("quit", "Quit MYLO").build(app)?;

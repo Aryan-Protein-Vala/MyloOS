@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { Sparkles, MousePointer2, Mic, Volume2, Save, ShieldCheck, Check } from 'lucide-react'
 import { RoughArrow, PencilLoop } from '@/components/ui/design-system'
 import { invoke } from '@tauri-apps/api/core'
@@ -16,6 +17,13 @@ export default function AppDashboard() {
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [mounted, setMounted] = useState(false)
+  
+  // Permissions State
+  const [permissions, setPermissions] = useState<{ accessibility: boolean, screen_recording: boolean }>({
+    accessibility: true,
+    screen_recording: true
+  })
+  
   const isMac = typeof navigator !== 'undefined' ? navigator.userAgent.includes('Mac') : true
 
   const refreshSaved = async () => {
@@ -41,6 +49,16 @@ export default function AppDashboard() {
         .catch(console.error)
 
       refreshSaved().catch(console.error)
+      
+      // Permissions poll loop
+      const checkPerms = () => {
+        invoke<{accessibility: boolean, screen_recording: boolean}>('check_permissions')
+          .then(setPermissions)
+          .catch(console.error)
+      }
+      checkPerms()
+      const interval = setInterval(checkPerms, 2000)
+      return () => clearInterval(interval)
     }
   }, [])
 
@@ -125,6 +143,75 @@ export default function AppDashboard() {
           </div>
         </div>
       </nav>
+
+      <section className="shell pt-12 pb-8">
+        <h1 style={{ fontSize: 'clamp(32px, 4vw, 54px)', maxWidth: '800px', lineHeight: 1 }}>
+          Motion. <em>Your Live Operator</em>.
+        </h1>
+        <p className="lede">
+          Connect your API keys below to give MYLO agency over your computer. 
+        </p>
+        
+        <div className="flex gap-4 mt-6">
+          <Link href="/orchestrator" className="ink-button bg-[var(--blue)] text-white text-sm px-6 py-2 shadow-[4px_4px_0_var(--ink)]">
+            Open Background Orchestrator
+          </Link>
+        </div>
+      </section>
+
+      {/* Permissions Onboarding */}
+      {(!permissions.accessibility || !permissions.screen_recording) && (
+        <section className="mode-panel bg-[var(--yellow)] mb-12 border-[3px] border-[var(--ink)]">
+          <div className="mode-text w-full">
+            <span className="eyebrow flex items-center gap-2"><ShieldCheck size={16} /> REQUIRED SETUP</span>
+            <h3>Grant System Permissions</h3>
+            <p className="opacity-80">MYLO needs OS-level permissions to see your screen and inject physics (mouse clicks). He cannot operate without these.</p>
+            
+            <div className="mt-6 flex flex-col gap-4">
+              <div className="flex items-center justify-between bg-white border-2 border-[var(--ink)] p-4 rounded-xl shadow-[4px_4px_0_var(--ink)]">
+                <div>
+                  <h4 className="font-bold font-mono m-0 flex items-center gap-2">
+                    Accessibility 
+                    {permissions.accessibility && <Check size={16} className="text-green-600" />}
+                  </h4>
+                  <p className="text-sm opacity-70 m-0">Required for hardware mouse clicking.</p>
+                </div>
+                {!permissions.accessibility ? (
+                  <button 
+                    onClick={() => invoke('request_accessibility_permissions')}
+                    className="ink-button bg-[var(--red)] text-white text-xs px-4 py-2 hover:scale-105"
+                  >
+                    Grant Access
+                  </button>
+                ) : (
+                  <span className="text-green-600 font-bold font-mono text-sm px-4">GRANTED</span>
+                )}
+              </div>
+
+              <div className="flex items-center justify-between bg-white border-2 border-[var(--ink)] p-4 rounded-xl shadow-[4px_4px_0_var(--ink)]">
+                <div>
+                  <h4 className="font-bold font-mono m-0 flex items-center gap-2">
+                    Screen Recording
+                    {permissions.screen_recording && <Check size={16} className="text-green-600" />}
+                  </h4>
+                  <p className="text-sm opacity-70 m-0">Required for MYLO's Vision engine.</p>
+                </div>
+                {!permissions.screen_recording ? (
+                  <button 
+                    onClick={() => invoke('request_screen_recording_permissions')}
+                    className="ink-button bg-[var(--red)] text-white text-xs px-4 py-2 hover:scale-105"
+                  >
+                    Grant Access
+                  </button>
+                ) : (
+                  <span className="text-green-600 font-bold font-mono text-sm px-4">GRANTED</span>
+                )}
+              </div>
+            </div>
+            <p className="text-xs opacity-60 mt-4 font-mono">You may need to restart the app after granting permissions in System Settings.</p>
+          </div>
+        </section>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
         {/* BYOK Settings Panel */}

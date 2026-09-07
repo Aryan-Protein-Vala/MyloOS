@@ -126,7 +126,31 @@ pub fn position_overlay_on_active_monitor(app: &AppHandle) -> Result<(), String>
 // Overlay window control
 // ─────────────────────────────────────────────────────────────────────────────
 
-#[command]
+#[derive(serde::Serialize, Clone)]
+pub struct PermissionsPayload {
+    pub accessibility: bool,
+    pub screen_recording: bool,
+}
+
+#[tauri::command]
+pub fn check_permissions() -> PermissionsPayload {
+    PermissionsPayload {
+        accessibility: crate::platform_macos::check_accessibility_permission(),
+        screen_recording: crate::platform_macos::check_screen_recording_permission(),
+    }
+}
+
+#[tauri::command]
+pub fn request_accessibility_permissions() -> bool {
+    crate::platform_macos::request_accessibility_permission()
+}
+
+#[tauri::command]
+pub fn request_screen_recording_permissions() -> bool {
+    crate::platform_macos::request_screen_recording_permission()
+}
+
+#[tauri::command]
 pub fn toggle_overlay(app_handle: AppHandle, visible: bool, click_through: bool) -> Result<(), String> {
     let window = overlay(&app_handle)?;
     let state = app_handle.state::<AppState>();
@@ -236,6 +260,12 @@ pub fn save_api_key(app_handle: AppHandle, provider: String, key: String) -> Res
 
 #[command]
 pub fn get_api_key(app_handle: AppHandle, provider: String) -> Result<Option<String>, String> {
+    if provider == "openai" || provider == "gemini" {
+        return Err("Reasoning API keys are restricted to backend execution".into());
+    }
+    if provider != "groq" && provider != "sarvam" {
+        return Err("Access to this API key is restricted".into());
+    }
     Ok(crate::storage::get_key(&app_handle, &provider))
 }
 
@@ -442,14 +472,14 @@ pub fn cancel_do_action(app_handle: AppHandle) {
 /// Validates desktop bounds, checks panic state, and ensures overlay is click-through.
 #[command]
 pub fn execute_agentic_action(app_handle: AppHandle, action: DoAction) -> Result<(), String> {
-    let bounds = desktop_bounds(&app_handle)?;
-    crate::input_injector::validate(&action, bounds)?;
-
-    // Abort immediately if overlay is hidden or panic hotkey was triggered
     let state = app_handle.state::<AppState>();
+    // Pre-execution check: abort immediately if overlay is hidden or panic hotkey was triggered
     if state.mode() == OverlayMode::Hidden {
         return Err("Action aborted: overlay is hidden or panic hotkey was pressed".to_string());
     }
+
+    let bounds = desktop_bounds(&app_handle)?;
+    crate::input_injector::validate(&action, bounds)?;
 
     // Programmatically arm and consume the rate-limiter guard
     {
@@ -465,6 +495,11 @@ pub fn execute_agentic_action(app_handle: AppHandle, action: DoAction) -> Result
     if let Ok(window) = overlay(&app_handle) {
         let _ = window.set_ignore_cursor_events(true);
     }
+
+    // Verify panic mode / overlay hidden state right before execution
+    if state.mode() == OverlayMode::Hidden {
+        return Err("Action aborted: overlay is hidden or panic hotkey was pressed during execution setup".to_string());
+    }
     
     let result = crate::input_injector::execute_action(&action, bounds);
 
@@ -479,8 +514,37 @@ pub fn execute_agentic_action(app_handle: AppHandle, action: DoAction) -> Result
 /// Execute a chain of actions in an automated Agentic loop sequentially.
 #[command]
 pub fn execute_agentic_chain(app_handle: AppHandle, actions: Vec<DoAction>) -> Result<(), String> {
+    let state = app_handle.state::<AppState>();
+    let mut last_expected_pos: Option<(i32, i32)> = None;
+
     for action in actions {
+        if state.mode() == OverlayMode::Hidden {
+            return Err("Action chain aborted: overlay is hidden or panic hotkey was pressed".to_string());
+        }
+
+        // Failsafe: Hardware Mouse Fight Detection
+        if let Some((expected_x, expected_y)) = last_expected_pos {
+            use enigo::{Enigo, Mouse};
+            if let Ok(enigo) = Enigo::new(&enigo::Settings::default()) {
+                if let Ok((actual_x, actual_y)) = enigo.location() {
+                    let dx = (actual_x - expected_x).abs();
+                    let dy = (actual_y - expected_y).abs();
+                    if dx > 15 || dy > 15 {
+                        return Err(format!("Agent aborted: detected manual mouse movement (delta {}px, {}px). User took control.", dx, dy));
+                    }
+                }
+            }
+        }
+
+        let next_x = action.x;
+        let next_y = action.y;
+
         execute_agentic_action(app_handle.clone(), action)?;
+        
+        if let (Some(x), Some(y)) = (next_x, next_y) {
+            last_expected_pos = Some((x, y));
+        }
+
         std::thread::sleep(std::time::Duration::from_millis(350));
     }
     Ok(())
@@ -777,4 +841,123 @@ pub async fn analyze_for_do_mode(
         eprintln!("[MYLO AI do] All providers failed: {}", last_error);
     }
     Ok(None)
+}
+
+#[derive(serde::Serialize, Clone)]
+pub struct AgentStatusPayload {
+    pub agent_id: String,
+    pub status: String,
+}
+
+#[derive(serde::Serialize, Clone)]
+pub struct AgentLogPayload {
+    pub agent_id: String,
+    pub message: String,
+}
+
+#[tauri::command]
+pub fn kill_headless_agent(
+    app_handle: AppHandle,
+    agent_id: String,
+) -> Result<(), String> {
+    use tauri::Emitter;
+
+    let state = app_handle.state::<AppState>();
+    let abort_handle = {
+        let mut active = state
+            .active_agents
+            .lock()
+            .map_err(|_| "Active agents lock is poisoned".to_string())?;
+        active.remove(&agent_id)
+    };
+
+    if let Some(handle) = abort_handle {
+        handle.abort();
+    }
+
+    let _ = app_handle.emit("agent_status", AgentStatusPayload {
+        agent_id: agent_id.clone(),
+        status: "killed".to_string(),
+    });
+
+    let _ = app_handle.emit("agent_log", AgentLogPayload {
+        agent_id,
+        message: "[SYSTEM] Agent killed by user.".to_string(),
+    });
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn spawn_headless_agent(
+    app: tauri::AppHandle,
+    agent_id: String,
+    task: String,
+) -> Result<(), String> {
+    use tauri::Emitter;
+    use std::time::Duration;
+
+    let app_clone = app.clone();
+    let agent_id_clone = agent_id.clone();
+
+    // Spawn a background Tokio task to simulate a running agent
+    let join_handle = tokio::spawn(async move {
+        let emit_log = |msg: &str| {
+            let _ = app_clone.emit("agent_log", AgentLogPayload {
+                agent_id: agent_id_clone.clone(),
+                message: msg.to_string(),
+            });
+        };
+
+        emit_log(&format!("Initialization sequence started for task: '{}'...", task));
+        tokio::time::sleep(Duration::from_secs(1)).await;
+
+        emit_log("Spawning headless Chromium instance (Puppeteer/Playwright)");
+        tokio::time::sleep(Duration::from_millis(800)).await;
+
+        emit_log("SUCCESS: Browser spawned (PID: 8492)");
+        tokio::time::sleep(Duration::from_secs(1)).await;
+
+        emit_log("Navigating to https://linkedin.com/search/results/people/");
+        tokio::time::sleep(Duration::from_secs(2)).await;
+
+        emit_log("Injecting session cookies...");
+        tokio::time::sleep(Duration::from_millis(500)).await;
+
+        emit_log("Applying filters: 'Founder', 'San Francisco', 'AI'");
+        tokio::time::sleep(Duration::from_secs(2)).await;
+
+        emit_log("AGENT REASONING: Found 10 profiles. Extracting data via DOM tree traversal.");
+        tokio::time::sleep(Duration::from_secs(1)).await;
+
+        emit_log("Extracted: Sarah Jenkins (CEO @ TechFlow)");
+        tokio::time::sleep(Duration::from_millis(300)).await;
+        emit_log("Extracted: Mark Zhang (Founder @ DataMesh)");
+        tokio::time::sleep(Duration::from_millis(300)).await;
+
+        emit_log("Clicking 'Next Page'...");
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        emit_log("Waiting for network idle (500ms)...");
+
+        // When the task finishes emitting logs, emit agent_status event with { agent_id, status: "completed" }
+        // and remove it from state.active_agents
+        let _ = app_clone.emit("agent_status", AgentStatusPayload {
+            agent_id: agent_id_clone.clone(),
+            status: "completed".to_string(),
+        });
+
+        let state = app_clone.state::<AppState>();
+        if let Ok(mut active) = state.active_agents.lock() {
+            active.remove(&agent_id_clone);
+        };
+    });
+
+    let state = app.state::<AppState>();
+    let mut active = state
+        .active_agents
+        .lock()
+        .map_err(|_| "Active agents lock is poisoned".to_string())?;
+    active.insert(agent_id, join_handle.abort_handle());
+
+    Ok(())
 }

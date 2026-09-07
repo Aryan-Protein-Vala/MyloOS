@@ -21,6 +21,12 @@
 use objc::{msg_send, runtime::Object, sel, sel_impl};
 #[cfg(target_os = "macos")]
 use tauri::Manager;
+#[cfg(target_os = "macos")]
+use core_foundation::dictionary::{CFDictionaryRef, CFDictionaryCreate};
+#[cfg(target_os = "macos")]
+use core_foundation::string::{CFStringRef, CFString};
+#[cfg(target_os = "macos")]
+use core_foundation::base::{CFTypeRef, TCFType};
 
 /// `NSWindowSharingNone` — excluded from screen sharing and recording.
 #[cfg(target_os = "macos")]
@@ -136,3 +142,61 @@ pub fn reassert_stream_safety(_window: &tauri::WebviewWindow) {}
 pub fn is_stream_safe(_window: &tauri::WebviewWindow) -> bool {
     false
 }
+
+// ── macOS Accessibility & Screen Recording Permissions ───────────────
+
+#[cfg(target_os = "macos")]
+#[link(name = "ApplicationServices", kind = "framework")]
+extern "C" {
+    pub fn AXIsProcessTrusted() -> bool;
+    pub fn AXIsProcessTrustedWithOptions(options: CFDictionaryRef) -> bool;
+}
+
+#[cfg(target_os = "macos")]
+#[link(name = "CoreGraphics", kind = "framework")]
+extern "C" {
+    pub fn CGPreflightScreenCaptureAccess() -> bool;
+    pub fn CGRequestScreenCaptureAccess() -> bool;
+}
+
+#[cfg(target_os = "macos")]
+pub fn check_accessibility_permission() -> bool {
+    unsafe { AXIsProcessTrusted() }
+}
+
+#[cfg(target_os = "macos")]
+pub fn request_accessibility_permission() -> bool {
+    use core_foundation::boolean::CFBoolean;
+    use core_foundation::dictionary::CFDictionary;
+    
+    // Create the options dictionary: { kAXTrustedCheckOptionPrompt: true }
+    // Hardcode the string for kAXTrustedCheckOptionPrompt instead of linking it directly
+    let key = CFString::new("AXTrustedCheckOptionPrompt");
+    let value = CFBoolean::true_value();
+    
+    let dict = CFDictionary::from_CFType_pairs(&[(key.as_CFType(), value.as_CFType())]);
+    
+    unsafe { AXIsProcessTrustedWithOptions(dict.as_concrete_TypeRef()) }
+}
+
+#[cfg(target_os = "macos")]
+pub fn check_screen_recording_permission() -> bool {
+    unsafe { CGPreflightScreenCaptureAccess() }
+}
+
+#[cfg(target_os = "macos")]
+pub fn request_screen_recording_permission() -> bool {
+    unsafe { CGRequestScreenCaptureAccess() }
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn check_accessibility_permission() -> bool { true }
+
+#[cfg(not(target_os = "macos"))]
+pub fn request_accessibility_permission() -> bool { true }
+
+#[cfg(not(target_os = "macos"))]
+pub fn check_screen_recording_permission() -> bool { true }
+
+#[cfg(not(target_os = "macos"))]
+pub fn request_screen_recording_permission() -> bool { true }

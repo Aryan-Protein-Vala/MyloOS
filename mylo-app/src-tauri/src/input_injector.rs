@@ -117,7 +117,7 @@ pub fn validate(action: &DoAction, bounds: DesktopBounds) -> Result<(), String> 
             if amount == 0 {
                 return Err("'scroll' requires a non-zero scrollAmount".to_string());
             }
-            if amount.abs() > MAX_SCROLL {
+            if amount.unsigned_abs() > MAX_SCROLL as u32 {
                 return Err(format!(
                     "Scroll of {amount} notches exceeds the limit of {MAX_SCROLL}"
                 ));
@@ -151,11 +151,43 @@ pub fn execute_action(action: &DoAction, bounds: DesktopBounds) -> Result<(), St
         )
     })?;
 
+    // Corner failsafe check: if current cursor is at (0, 0), abort immediately
+    if let Ok((cx, cy)) = enigo.location() {
+        if cx == 0 && cy == 0 {
+            return Err("Corner failsafe triggered: cursor is at (0, 0)".to_string());
+        }
+    }
+
+    // Ensure that coordinate points are valid if supplied, and enforce corner failsafe on target
+    if action.x.is_some() || action.y.is_some() {
+        let (Some(x), Some(y)) = (action.x, action.y) else {
+            return Err(format!(
+                "Incomplete coordinates for action '{}': both x and y must be provided",
+                action.action_type
+            ));
+        };
+        if !bounds.contains(x, y) {
+            return Err(format!(
+                "Target coordinates ({x}, {y}) are outside desktop bounds \
+                 ({}, {}) to ({}, {})",
+                bounds.left, bounds.top, bounds.right, bounds.bottom
+            ));
+        }
+        if x == 0 && y == 0 {
+            return Err("Corner failsafe triggered: target is (0, 0)".to_string());
+        }
+    }
+
     let point = || -> Result<(i32, i32), String> {
-        Ok((
-            action.x.ok_or("missing x")?,
-            action.y.ok_or("missing y")?,
-        ))
+        let x = action.x.ok_or("missing x")?;
+        let y = action.y.ok_or("missing y")?;
+        if !bounds.contains(x, y) {
+            return Err(format!("Target coordinates ({x}, {y}) are outside desktop bounds"));
+        }
+        if x == 0 && y == 0 {
+            return Err("Corner failsafe triggered: target is (0, 0)".to_string());
+        }
+        Ok((x, y))
     };
 
     match action.action_type.as_str() {
@@ -284,6 +316,13 @@ mod tests {
     fn runaway_scroll_is_rejected() {
         let mut a = action("scroll");
         a.scroll_amount = Some(5000);
+        assert!(validate(&a, BOUNDS).is_err());
+    }
+
+    #[test]
+    fn scroll_min_int_does_not_panic() {
+        let mut a = action("scroll");
+        a.scroll_amount = Some(i32::MIN);
         assert!(validate(&a, BOUNDS).is_err());
     }
 
