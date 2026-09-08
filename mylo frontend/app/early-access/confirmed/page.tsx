@@ -21,7 +21,7 @@ export default function ConfirmedPage() {
         </div>
 
         <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '7px 14px', background: 'var(--yellow)', border: '2px solid var(--ink)', borderRadius: '40px', font: 'bold 11px Courier New, monospace', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: '24px' }}>
-          ✳ You&apos;re In!
+          <img src="/icon.svg" alt="logo" className="inline-block w-[1em] h-[1em]" /> You&apos;re In!
         </div>
 
         <h1 style={{ fontSize: 'clamp(36px, 5vw, 58px)', lineHeight: '1', letterSpacing: '-.065em', marginBottom: '20px' }}>

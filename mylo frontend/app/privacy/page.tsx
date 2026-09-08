@@ -8,7 +8,7 @@ export default function PrivacyPage() {
     <main className="min-h-screen pb-20">
       <nav className="nav shell mb-12">
         <Link href="/" className="brand">
-          <span className="brand-mark">✳</span>
+          <span className="brand-mark"><img src="/icon.svg" alt="logo" className="inline-block w-[1em] h-[1em]" /></span>
           <span><strong>MYLO</strong><small>[os-native engine]</small></span>
         </Link>
         <Link href="/" className="nav-back-link">← Back to Home</Link>
@@ -60,7 +60,7 @@ export default function PrivacyPage() {
 
       <footer className="footer shell mt-20">
         <div className="brand">
-          <span className="brand-mark">✳</span>
+          <span className="brand-mark"><img src="/icon.svg" alt="logo" className="inline-block w-[1em] h-[1em]" /></span>
           <span><strong>MYLO</strong><small>[os-native engine]</small></span>
         </div>
         <div className="footer-links">

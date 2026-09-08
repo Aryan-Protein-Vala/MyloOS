@@ -29,6 +29,11 @@ enigo = { version = "0.3", features = ["serde"] }
 keyring = { version = "3.6.3", features = ["apple-native", "windows-native", "linux-native"] }
 reqwest = { version = "0.13.3", features = ["json"] }
 core-foundation = "0.10.1"
+headless_chrome = "1.0.10"
+anyhow = "1.0.104"
+regex = "1.13.1"
+rusqlite = { version = "0.40.2", features = ["bundled"] }
+tauri-plugin-updater = "2.11.0"
 
 # ── Windows-only ────────────────────────────────────────────────────────────
 [target.'cfg(target_os = "windows")'.dependencies]
@@ -36,7 +41,12 @@ windows-capture = "=1.5.0"
 windows = { version = "0.58", features = [
   "Win32_Foundation",
   "Win32_UI_WindowsAndMessaging",
+  "Win32_UI_Input_KeyboardAndMouse",
   "Win32_Graphics_Gdi",
+  "UI_UIAutomation",
+  "Win32_System_SystemInformation",
+  "Win32_UI_Accessibility",
+  "Win32_System_Com",
 ] }
 
 # ── macOS-only ──────────────────────────────────────────────────────────────

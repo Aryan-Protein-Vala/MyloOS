@@ -50,9 +50,10 @@ export default function OverlayPage() {
   const intentInputRef = useRef<HTMLInputElement>(null)
 
   // ── Agentic State Machine ──────────────────────────────────────────────────
-  const [isPttPressed, setIsPttPressed] = useState(false)
+  const [, setIsPttPressed] = useState(false)
   const [agentPhase, setAgentPhase] = useState<'idle' | 'listening' | 'thinking' | 'acting'>('idle')
   const [agentCursor, setAgentCursor] = useState<{x: number | number[], y: number | number[]} | null>(null)
+  const [targetReticle, setTargetReticle] = useState<{ x: number, y: number, label?: string } | null>(null)
   const lastCursorPos = useRef<{x: number, y: number} | null>(null)
   const [agentMessage, setAgentMessage] = useState<string | null>(null)
 
@@ -87,6 +88,7 @@ export default function OverlayPage() {
     setAgentPhase('idle')
     setAgentMessage(null)
     setAgentCursor(null)
+    setTargetReticle(null)
 
     setMode('hidden')
     setProactiveMessage(null)
@@ -101,6 +103,9 @@ export default function OverlayPage() {
     if (isTauri()) {
       try {
         await invoke('cancel_do_action')
+      } catch {}
+      try {
+        await invoke('dismiss')
       } catch {}
       try {
         await invoke('toggle_overlay', { visible: false, clickThrough: true })
@@ -141,233 +146,24 @@ export default function OverlayPage() {
     setTimeout(() => intentInputRef.current?.focus(), 100)
   }, [proactiveMessage])
 
-  // ── Event listeners ────────────────────────────────────────────────────────
+  const modeRef = useRef(mode)
+  const agentPhaseRef = useRef(agentPhase)
+
   useEffect(() => {
-    let mounted = true
+    modeRef.current = mode
+  }, [mode])
 
-    if (isTauri()) {
-      invoke<boolean>('verify_stream_safety').then((val) => {
-        if (mounted && typeof val === 'boolean') setIsStreamSafe(val)
-      }).catch(console.error)
-    }
+  useEffect(() => {
+    agentPhaseRef.current = agentPhase
+  }, [agentPhase])
 
-    let unlistenState: (() => void) | null = null
-    let unlistenTarget: (() => void) | null = null
-    let unlistenPtt: (() => void) | null = null
-    let unlistenTelemetry: (() => void) | null = null
-
-    const setup = async () => {
-      if (!isTauri()) return
-
-      refreshActiveModel()
-
-      // Overlay state from hotkeys
-      const cleanState = await listen<OverlayMode>('overlay-state-changed', (event) => {
-        if (!mounted) return
-        const newMode = event.payload
-        setMode(newMode)
-        refreshActiveModel()
-
-        if (newMode === 'ask') {
-          setAskSelection(null)
-          setAskResponse(null)
-          setAskProcessing(false)
-          if (isTauri()) invoke('set_overlay_interactive', { interactive: true }).catch(() => {})
-        } else if (newMode === 'do') {
-          setDoPhase('idle')
-          setDoSelection(null)
-          setPendingAction(null)
-          setDoError(null)
-          setUserIntent('')
-          if (isTauri()) invoke('set_overlay_interactive', { interactive: true }).catch(() => {}) // do mode needs drawing too
-        } else if (newMode === 'hidden') {
-          isAgentCancelledRef.current = true
-          cancelRecording()
-          stopAndRevokeCurrentAudio()
-          if (agentTimeoutRef.current) {
-            clearTimeout(agentTimeoutRef.current)
-            agentTimeoutRef.current = null
-          }
-          setAgentPhase('idle')
-          setAgentMessage(null)
-          setAgentCursor(null)
-          setDoPhase('idle')
-          setPendingAction(null)
-          setProactiveMessage(null)
-          if (isTauri()) invoke('set_overlay_interactive', { interactive: false }).catch(() => {})
-        } else {
-          if (isTauri()) invoke('set_overlay_interactive', { interactive: false }).catch(() => {})
-        }
-
-        setTimeout(() => {
-          if (mounted && isTauri()) {
-            invoke<boolean>('verify_stream_safety').then((val) => {
-              if (mounted && typeof val === 'boolean') setIsStreamSafe(val)
-            }).catch(console.error)
-          }
-        }, 100)
-      })
-
-      if (!mounted) {
-        cleanState()
-      } else {
-        unlistenState = cleanState
-      }
-
-      // Telemetry trigger
-      const cleanTelemetry = await listen<{ active_app: string, idle_time_secs: number }>('telemetry_trigger', async (event) => {
-        if (!mounted) return
-        
-        // Show proactive pop-up without fully entering "do" mode unless they click it
-        setProactiveMessage({
-          app: event.payload.active_app,
-          msg: `Hey, looks like you've been idle in ${event.payload.active_app}. Need help?`
-        })
-
-        if (isTauri()) {
-          invoke('toggle_overlay', { visible: true, clickThrough: false }).catch(() => {})
-        }
-        
-        // Play TTS for the proactive trigger
-        try {
-          const sarvamKey = isTauri() ? await invoke<string | null>('get_api_key', { provider: 'sarvam' }).catch(() => null) : null
-          if (sarvamKey && mounted) {
-            playTTS(`Need help in ${event.payload.active_app}?`, sarvamKey).catch(console.error)
-          }
-        } catch (err) {
-          console.error("Error playing telemetry TTS:", err)
-        }
-        
-        // Auto-hide after 15 seconds
-        setTimeout(() => {
-          if (mounted) {
-            setProactiveMessage((curr) => {
-              if (curr?.app === event.payload.active_app) {
-                if (mode === 'hidden' && agentPhase === 'idle' && isTauri()) {
-                  invoke('toggle_overlay', { visible: false, clickThrough: true }).catch(() => {})
-                }
-                return null
-              }
-              return curr
-            })
-          }
-        }, 15000)
-      })
-
-      if (!mounted) {
-        cleanTelemetry()
-      } else {
-        unlistenTelemetry = cleanTelemetry
-      }
-
-      // Coach mode target position updates
-      const cleanTarget = await listen<{ x: number; y: number }>('target-pos-changed', (event) => {
-        if (!mounted) return
-        setTargetPos(event.payload)
-      })
-
-      if (!mounted) {
-        cleanTarget()
-      } else {
-        unlistenTarget = cleanTarget
-      }
-
-      // PTT listener
-      const cleanPtt = await listen<string>('ptt-state-changed', async (event) => {
-        if (!mounted) return
-        const state = event.payload
-        if (state === 'pressed') {
-          refreshActiveModel()
-          if (agentTimeoutRef.current) {
-            clearTimeout(agentTimeoutRef.current)
-            agentTimeoutRef.current = null
-          }
-          micFailedRef.current = false
-          isAgentCancelledRef.current = false
-          setIsPttPressed(true)
-          setAgentPhase('listening')
-          setAgentMessage('Listening to you...')
-          const started = await startRecording()
-          if (!started) {
-            micFailedRef.current = true
-            setAgentMessage('Microphone access failed. Check permissions.')
-            agentTimeoutRef.current = setTimeout(async () => {
-              setAgentPhase('idle')
-              setAgentMessage(null)
-              if (isTauri()) {
-                try {
-                  await invoke('toggle_overlay', { visible: false, clickThrough: true })
-                } catch {}
-              }
-            }, 3000)
-          }
-        } else if (state === 'released') {
-          setIsPttPressed(false)
-          if (micFailedRef.current || isAgentCancelledRef.current) return
-
-          setAgentPhase('thinking')
-          setAgentMessage('Transcribing...')
-          const groqKey = isTauri() ? await invoke<string | null>('get_api_key', { provider: 'groq' }).catch(() => null) : null
-          const res = await stopRecordingAndTranscribe(groqKey || '')
-          
-          if (isAgentCancelledRef.current) {
-            setAgentPhase('idle')
-            setAgentMessage(null)
-            return
-          }
-
-          if (res.text && res.text.trim()) {
-            setAgentMessage(`Thinking about: "${res.text.trim()}"`)
-            await runAgenticLoop(res.text.trim())
-          } else {
-            setAgentMessage(res.error || (groqKey ? 'No speech detected.' : 'Groq API Key required for voice.'))
-            agentTimeoutRef.current = setTimeout(async () => {
-              setAgentPhase('idle')
-              setAgentMessage(null)
-              if (isTauri()) {
-                try {
-                  await invoke('toggle_overlay', { visible: false, clickThrough: true })
-                } catch {}
-              }
-            }, 2500)
-          }
-        }
-      })
-
-      if (!mounted) {
-        cleanPtt()
-      } else {
-        unlistenPtt = cleanPtt
-      }
-    }
-
-    setup().catch(console.error)
-
-    // Double-Esc to dismiss
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        const now = Date.now()
-        if (now - lastEscTime.current < 400) {
-          dismissOverlay()
-        }
-        lastEscTime.current = now
-      }
-    }
-    window.addEventListener('keydown', onKeyDown)
-
-    return () => {
-      mounted = false
-      if (unlistenState) unlistenState()
-      if (unlistenTarget) unlistenTarget()
-      if (unlistenPtt) unlistenPtt()
-      if (unlistenTelemetry) unlistenTelemetry()
-      window.removeEventListener('keydown', onKeyDown)
-    }
-  }, [dismissOverlay, refreshActiveModel, mode, agentPhase])
-
-  const runAgenticLoop = async (intent: string) => {
+  const runAgenticLoop = useCallback(async (intent: string) => {
     isAgentCancelledRef.current = false
+    setTargetReticle(null)
     setAgentPhase('thinking')
+    if (isTauri()) {
+      await invoke('cancel_do_action').catch(() => {})
+    }
 
     const MAX_STEPS = 5
     let currentStep = 0
@@ -467,14 +263,22 @@ export default function OverlayPage() {
 
           // Allow flight animation to guide user eye before executing
           await new Promise((r) => setTimeout(r, 750))
+
+          // Target reticle confirmation box: pulse for 350ms before action fires
+          setTargetReticle({ x: targetX, y: targetY, label: action.description })
+          await new Promise((r) => setTimeout(r, 350))
         }
 
-        if (isAgentCancelledRef.current) break
+        if (isAgentCancelledRef.current) {
+          setTargetReticle(null)
+          break
+        }
 
         // Execute action in Rust
         if (isTauri()) {
           await invoke('execute_agentic_action', { action })
         }
+        setTargetReticle(null)
 
         // Check if task is finished
         if (action.status === 'complete') {
@@ -486,22 +290,262 @@ export default function OverlayPage() {
         // Delay between loop iterations for UI to settle
         await new Promise((r) => setTimeout(r, 600))
       }
-    } catch (e) {
+    } catch (e: unknown) {
       console.error("Agentic loop error:", e)
-      setAgentMessage('Action failed or cancelled.')
+      const errStr = typeof e === 'string' ? e : (e instanceof Error ? e.message : 'Action failed or cancelled.')
+      setAgentMessage(errStr)
+      setTargetReticle(null)
     } finally {
+      setTargetReticle(null)
       agentTimeoutRef.current = setTimeout(async () => {
         setAgentPhase('idle')
         setAgentMessage(null)
         setAgentCursor(null)
-        if (mode === 'hidden' && isTauri()) {
+        setTargetReticle(null)
+        if (modeRef.current === 'hidden' && isTauri()) {
           try {
             await invoke('toggle_overlay', { visible: false, clickThrough: true })
           } catch {}
         }
       }, 2500)
     }
-  }
+  }, [refreshActiveModel])
+
+  // ── Event listeners ────────────────────────────────────────────────────────
+  useEffect(() => {
+    let mounted = true
+
+    if (isTauri()) {
+      invoke<boolean>('verify_stream_safety').then((val) => {
+        if (mounted && typeof val === 'boolean') setIsStreamSafe(val)
+      }).catch(console.error)
+    }
+
+    let unlistenState: (() => void) | null = null
+    let unlistenTarget: (() => void) | null = null
+    let unlistenPtt: (() => void) | null = null
+    let unlistenTelemetry: (() => void) | null = null
+
+    const setup = async () => {
+      if (!isTauri()) return
+
+      refreshActiveModel()
+
+      // Overlay state from hotkeys
+      const cleanState = await listen<OverlayMode>('overlay-state-changed', (event) => {
+        if (!mounted) return
+        const newMode = event.payload
+        setMode(newMode)
+        refreshActiveModel()
+
+        if (newMode !== 'ask') {
+          setAskSelection(null)
+          setAskResponse(null)
+          setAskProcessing(false)
+        }
+
+        if (newMode === 'ask') {
+          setAskSelection(null)
+          setAskResponse(null)
+          setAskProcessing(false)
+          if (isTauri()) invoke('set_overlay_interactive', { interactive: true }).catch(() => {})
+        } else if (newMode === 'do') {
+          setDoPhase('idle')
+          setDoSelection(null)
+          setPendingAction(null)
+          setDoError(null)
+          setUserIntent('')
+          if (isTauri()) invoke('set_overlay_interactive', { interactive: true }).catch(() => {}) // do mode needs drawing too
+        } else if (newMode === 'hidden') {
+          isAgentCancelledRef.current = true
+          cancelRecording()
+          stopAndRevokeCurrentAudio()
+          if (agentTimeoutRef.current) {
+            clearTimeout(agentTimeoutRef.current)
+            agentTimeoutRef.current = null
+          }
+          setAgentPhase('idle')
+          setAgentMessage(null)
+          setAgentCursor(null)
+          setDoPhase('idle')
+          setPendingAction(null)
+          setProactiveMessage(null)
+          if (isTauri()) invoke('set_overlay_interactive', { interactive: false }).catch(() => {})
+        } else {
+          if (isTauri()) invoke('set_overlay_interactive', { interactive: false }).catch(() => {})
+        }
+
+        setTimeout(() => {
+          if (mounted && isTauri()) {
+            invoke<boolean>('verify_stream_safety').then((val) => {
+              if (mounted && typeof val === 'boolean') setIsStreamSafe(val)
+            }).catch(console.error)
+          }
+        }, 100)
+      })
+
+      if (!mounted) {
+        cleanState()
+      } else {
+        unlistenState = cleanState
+      }
+
+      // Telemetry trigger
+      const cleanTelemetry = await listen<{ active_app: string, idle_time_secs: number }>('telemetry_trigger', async (event) => {
+        if (!mounted) return
+        
+        // Show proactive pop-up without fully entering "do" mode unless they click it
+        setProactiveMessage({
+          app: event.payload.active_app,
+          msg: `Hey, looks like you've been idle in ${event.payload.active_app}. Need help?`
+        })
+
+        if (isTauri()) {
+          invoke('toggle_overlay', { visible: true, clickThrough: false }).catch(() => {})
+        }
+        
+        // Play TTS for the proactive trigger
+        try {
+          const sarvamKey = isTauri() ? await invoke<string | null>('get_api_key', { provider: 'sarvam' }).catch(() => null) : null
+          if (sarvamKey && mounted) {
+            playTTS(`Need help in ${event.payload.active_app}?`, sarvamKey).catch(console.error)
+          }
+        } catch (err) {
+          console.error("Error playing telemetry TTS:", err)
+        }
+        
+        // Auto-hide after 15 seconds
+        setTimeout(() => {
+          if (mounted) {
+            setProactiveMessage((curr) => {
+              if (curr?.app === event.payload.active_app) {
+                if (modeRef.current === 'hidden' && agentPhaseRef.current === 'idle' && isTauri()) {
+                  invoke('toggle_overlay', { visible: false, clickThrough: true }).catch(() => {})
+                }
+                return null
+              }
+              return curr
+            })
+          }
+        }, 15000)
+      })
+
+      if (!mounted) {
+        cleanTelemetry()
+      } else {
+        unlistenTelemetry = cleanTelemetry
+      }
+
+      // Coach mode target position updates
+      const cleanTarget = await listen<{ x: number; y: number }>('target-pos-changed', (event) => {
+        if (!mounted) return
+        setTargetPos(event.payload)
+      })
+
+      if (!mounted) {
+        cleanTarget()
+      } else {
+        unlistenTarget = cleanTarget
+      }
+
+      // PTT listener
+      const cleanPtt = await listen<string | { state: string }>('ptt-state-changed', async (event) => {
+        if (!mounted) return
+        const rawPayload = event.payload as string | { state: string }
+        const isPressed = (typeof rawPayload === 'string' && rawPayload === 'pressed') ||
+                          (typeof rawPayload === 'object' && rawPayload !== null && rawPayload.state === 'pressed')
+        const isReleased = (typeof rawPayload === 'string' && rawPayload === 'released') ||
+                           (typeof rawPayload === 'object' && rawPayload !== null && rawPayload.state === 'released')
+
+        if (isPressed) {
+          stopAndRevokeCurrentAudio()
+          refreshActiveModel()
+          if (agentTimeoutRef.current) {
+            clearTimeout(agentTimeoutRef.current)
+            agentTimeoutRef.current = null
+          }
+          micFailedRef.current = false
+          isAgentCancelledRef.current = false
+          setIsPttPressed(true)
+          setAgentPhase('listening')
+          setAgentMessage('Listening to you...')
+          const started = await startRecording()
+          if (!started) {
+            micFailedRef.current = true
+            setAgentMessage('Microphone access failed. Check permissions.')
+            agentTimeoutRef.current = setTimeout(async () => {
+              setAgentPhase('idle')
+              setAgentMessage(null)
+              if (isTauri()) {
+                try {
+                  await invoke('toggle_overlay', { visible: false, clickThrough: true })
+                } catch {}
+              }
+            }, 3000)
+          }
+        } else if (isReleased) {
+          setIsPttPressed(false)
+          if (micFailedRef.current || isAgentCancelledRef.current) return
+
+          setAgentPhase('thinking')
+          setAgentMessage('Transcribing...')
+          const groqKey = isTauri() ? await invoke<string | null>('get_api_key', { provider: 'groq' }).catch(() => null) : null
+          const res = await stopRecordingAndTranscribe(groqKey || '')
+          
+          if (isAgentCancelledRef.current) {
+            setAgentPhase('idle')
+            setAgentMessage(null)
+            return
+          }
+
+          if (res.text && res.text.trim()) {
+            setAgentMessage(`Thinking about: "${res.text.trim()}"`)
+            await runAgenticLoop(res.text.trim())
+          } else {
+            setAgentMessage(res.error || (groqKey ? 'No speech detected.' : 'Groq API Key required for voice.'))
+            agentTimeoutRef.current = setTimeout(async () => {
+              setAgentPhase('idle')
+              setAgentMessage(null)
+              if (isTauri()) {
+                try {
+                  await invoke('toggle_overlay', { visible: false, clickThrough: true })
+                } catch {}
+              }
+            }, 2500)
+          }
+        }
+      })
+
+      if (!mounted) {
+        cleanPtt()
+      } else {
+        unlistenPtt = cleanPtt
+      }
+    }
+
+    setup().catch(console.error)
+
+    // Double-Esc to dismiss
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        const now = Date.now()
+        if (now - lastEscTime.current < 400) {
+          dismissOverlay()
+        }
+        lastEscTime.current = now
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+
+    return () => {
+      mounted = false
+      if (unlistenState) unlistenState()
+      if (unlistenTarget) unlistenTarget()
+      if (unlistenPtt) unlistenPtt()
+      if (unlistenTelemetry) unlistenTelemetry()
+      window.removeEventListener('keydown', onKeyDown)
+    }
+  }, [dismissOverlay, refreshActiveModel, runAgenticLoop])
 
   // ── Ask Mode pointer handlers ──────────────────────────────────────────────
 
@@ -602,7 +646,13 @@ export default function OverlayPage() {
   // ── Do Mode: capture + AI + execution ─────────────────────────────────────
 
   const runDoAnalyze = async () => {
-    if (!doSelection || !userIntent.trim()) return
+    if (!userIntent.trim()) return
+    const selection = doSelection || {
+      x: 0,
+      y: 0,
+      w: typeof window !== 'undefined' ? window.innerWidth : 1920,
+      h: typeof window !== 'undefined' ? window.innerHeight : 1080,
+    }
     setDoPhase('analyzing')
 
     try {
@@ -613,10 +663,10 @@ export default function OverlayPage() {
       }
 
       const res = await invoke<{ image: string | null; rect: { x: number; y: number; width: number; height: number } }>('capture_screen_crop', {
-        x: doSelection.x,
-        y: doSelection.y,
-        width: doSelection.w,
-        height: doSelection.h,
+        x: selection.x,
+        y: selection.y,
+        width: selection.w,
+        height: selection.h,
       }).catch((e) => {
         console.error('Error capturing screen crop:', e)
         return null
@@ -753,8 +803,10 @@ export default function OverlayPage() {
             {mode === 'do' && doPhase === 'executing' && '● DO MODE — executing...'}
             {mode === 'coach' && '● COACH MODE'}
           </div>
-          <div className="text-[8px] font-mono text-[var(--ink)] mt-1 opacity-50">
-            double-Esc to dismiss
+          <div className="mt-1">
+            <span className="inline-block bg-black/85 text-white/90 border border-white/20 px-2 py-0.5 rounded shadow-lg text-[9px] font-mono">
+              double-Esc to dismiss
+            </span>
           </div>
         </div>
       )}
@@ -806,7 +858,7 @@ export default function OverlayPage() {
                 onClick={handleDismissProactive}
                 className="bg-[var(--paper)] hover:bg-white text-[var(--ink)] border-2 border-[var(--ink)] px-3 py-1.5 font-['Courier_New'] text-xs font-bold shadow-[2px_2px_0_var(--ink)] transition-all active:translate-x-[1px] active:translate-y-[1px] cursor-pointer"
               >
-                I'm good
+                I&apos;m good
               </button>
             </div>
           </motion.div>
@@ -847,7 +899,7 @@ export default function OverlayPage() {
       )}
 
       {/* ── Ask Mode: frozen selection + sticky note ──────────────────── */}
-      {askSelection && (
+      {mode === 'ask' && askSelection && (
         <div
           className="absolute pointer-events-none"
           style={{ left: askSelection.x, top: askSelection.y, width: askSelection.w, height: askSelection.h }}
@@ -1100,13 +1152,6 @@ export default function OverlayPage() {
             className="fixed z-[10003] pointer-events-none"
             style={{ width: 32, height: 32, marginLeft: -4, marginTop: -4, left: 0, top: 0 }}
           >
-            {agentPhase === 'acting' && (
-              <>
-                {/* Visual Action Confirmation Reticle */}
-                <div className="absolute top-[8px] left-[8px] w-12 h-12 -ml-6 -mt-6 border-2 border-[var(--red)] border-dashed rounded animate-spin-slow opacity-80" />
-                <div className="absolute top-[8px] left-[8px] w-16 h-16 -ml-8 -mt-8 border-2 border-[var(--red)] rounded opacity-40 animate-ping" />
-              </>
-            )}
             <div className="absolute inset-0 bg-[var(--blue)] rounded-full opacity-30 animate-ping" />
             <svg
               width="28"
@@ -1125,6 +1170,48 @@ export default function OverlayPage() {
             <div className="absolute left-6 top-6 bg-[var(--ink)] text-white text-[10px] font-mono font-bold px-1.5 py-0.5 rounded shadow border border-white">
               MYLO
             </div>
+          </motion.div>
+        )}
+
+        {/* ── Visual Action Confirmation Box / Targeting Reticle ── */}
+        {targetReticle && (
+          <motion.div
+            key="targeting-reticle"
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.8 }}
+            transition={{ duration: 0.15, ease: "easeOut" }}
+            className="fixed z-[10004] pointer-events-none"
+            style={{
+              left: targetReticle.x,
+              top: targetReticle.y,
+              transform: 'translate(-50%, -50%)',
+              width: 56,
+              height: 56,
+            }}
+          >
+            {/* Subtle Radar Pulse */}
+            <div className="absolute inset-0 rounded-full border border-red-500/50 bg-red-500/10 animate-ping opacity-60" />
+            <div className="absolute -inset-2 rounded-full border border-red-500/30 animate-pulse" />
+
+            {/* Glowing Crosshairs with dark outline/drop-shadow for white backgrounds */}
+            <div className="absolute left-0 top-1/2 w-full h-[1.5px] -translate-y-1/2 bg-red-500 shadow-[0_0_4px_rgba(0,0,0,0.8)] opacity-80" />
+            <div className="absolute top-0 left-1/2 h-full w-[1.5px] -translate-x-1/2 bg-red-500 shadow-[0_0_4px_rgba(0,0,0,0.8)] opacity-80" />
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-red-400 shadow-[0_0_4px_rgba(0,0,0,0.8)]" />
+
+            {/* Brackets [ and ] */}
+            {/* Left bracket [ */}
+            <div className="absolute left-0 top-0 bottom-0 w-3 border-l-2 border-y-2 border-red-500 shadow-[0_0_4px_rgba(0,0,0,0.8)]" />
+            {/* Right bracket ] */}
+            <div className="absolute right-0 top-0 bottom-0 w-3 border-r-2 border-y-2 border-red-500 shadow-[0_0_4px_rgba(0,0,0,0.8)]" />
+
+            {/* Action Confirmation Label */}
+            {targetReticle.label && (
+              <div className="absolute top-full mt-2.5 left-1/2 -translate-x-1/2 whitespace-nowrap px-2.5 py-1 bg-black/90 text-red-400 border border-red-500/60 rounded font-mono text-[10px] tracking-wider shadow-[0_2px_10px_rgba(0,0,0,0.7)] flex items-center gap-1.5 backdrop-blur-sm">
+                <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-ping" />
+                <span className="font-semibold uppercase text-[9px]">{targetReticle.label}</span>
+              </div>
+            )}
           </motion.div>
         )}
       </AnimatePresence>

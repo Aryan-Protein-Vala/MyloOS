@@ -24,7 +24,7 @@ export default function FAQPage() {
     <div className="min-h-screen bg-[#f7f5ef] text-[#1e1e1e] font-sans">
       <nav className="nav shell" style={{ borderBottom: '2px solid var(--ink)' }}>
         <div className="brand">
-          <span className="brand-mark">✳</span>
+          <span className="brand-mark"><img src="/icon.svg" alt="logo" className="inline-block w-[1em] h-[1em]" /></span>
           <Link href="/"><span><strong>MYLO</strong><small>[os-native agent]</small></span></Link>
         </div>
         <div className="nav-actions">

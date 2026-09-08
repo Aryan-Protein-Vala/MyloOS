@@ -14,19 +14,19 @@
 //! - `NSWindowSharingNone`      → invisible to OBS, Zoom, QuickTime
 //! - `NSScreenSaverWindowLevel` → floats above ordinary app windows
 //! - `CanJoinAllSpaces | Stationary | FullScreenAuxiliary`
-//!                              → present on every Space, including over
-//!                                apps that are in native fullscreen
+//!   → present on every Space, including over
+//!   apps that are in native fullscreen
 
 #[cfg(target_os = "macos")]
 use objc::{msg_send, runtime::Object, sel, sel_impl};
 #[cfg(target_os = "macos")]
 use tauri::Manager;
 #[cfg(target_os = "macos")]
-use core_foundation::dictionary::{CFDictionaryRef, CFDictionaryCreate};
+use core_foundation::dictionary::CFDictionaryRef;
 #[cfg(target_os = "macos")]
-use core_foundation::string::{CFStringRef, CFString};
+use core_foundation::string::CFString;
 #[cfg(target_os = "macos")]
-use core_foundation::base::{CFTypeRef, TCFType};
+use core_foundation::base::TCFType;
 
 /// `NSWindowSharingNone` — excluded from screen sharing and recording.
 #[cfg(target_os = "macos")]

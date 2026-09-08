@@ -46,7 +46,7 @@ export default function EarlyAccessPage() {
     <main className="ea-page">
       <nav className="nav shell">
         <Link href="/" className="brand">
-          <span className="brand-mark">✳</span>
+          <span className="brand-mark"><img src="/icon.svg" alt="logo" className="inline-block w-[1em] h-[1em]" /></span>
           <span><strong>MYLO</strong><small>[os-native agent]</small></span>
         </Link>
         <Link href="/" className="nav-back-link" style={{ marginLeft: 'auto' }}>

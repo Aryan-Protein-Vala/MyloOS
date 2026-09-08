@@ -150,9 +150,8 @@ fn activate(app: &AppHandle, mode: OverlayMode) {
         }
         let _ = overlay.show();
     } else {
-        if let Ok(mut guard) = state.actions.lock() {
-            guard.disarm();
-        }
+        state.disarm();
+        *state.last_synthetic_pos.lock().unwrap_or_else(|p| p.into_inner()) = None;
         let _ = overlay.set_ignore_cursor_events(true);
         let _ = overlay.hide();
     }
@@ -162,9 +161,8 @@ fn activate(app: &AppHandle, mode: OverlayMode) {
 fn panic_hide(app: &AppHandle) {
     let state = app.state::<AppState>();
     state.set_mode(OverlayMode::Hidden);
-    if let Ok(mut guard) = state.actions.lock() {
-        guard.disarm();
-    }
+    state.disarm();
+    *state.last_synthetic_pos.lock().unwrap_or_else(|p| p.into_inner()) = None;
     if let Some(overlay) = app.get_webview_window("overlay") {
         let _ = overlay.emit("overlay-state-changed", "hidden");
         let _ = overlay.set_ignore_cursor_events(true);
@@ -197,11 +195,9 @@ pub fn register_hotkeys(app: &AppHandle) {
                                 let _ = overlay.emit("ptt-state-changed", "pressed");
                             }
                         }
-                    } else if event.state() == ShortcutState::Released {
-                        if PTT_ACTIVE.swap(false, std::sync::atomic::Ordering::SeqCst) {
-                            if let Some(overlay) = handle.get_webview_window("overlay") {
-                                let _ = overlay.emit("ptt-state-changed", "released");
-                            }
+                    } else if event.state() == ShortcutState::Released && PTT_ACTIVE.swap(false, std::sync::atomic::Ordering::SeqCst) {
+                        if let Some(overlay) = handle.get_webview_window("overlay") {
+                            let _ = overlay.emit("ptt-state-changed", "released");
                         }
                     }
                     return;

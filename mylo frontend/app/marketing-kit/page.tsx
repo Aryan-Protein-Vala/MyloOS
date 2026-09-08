@@ -7,7 +7,7 @@ export default function MarketingKit() {
       {/* Navigation */}
       <nav className="nav shell" style={{ borderBottom: 'none', background: 'transparent' }}>
         <Link href="/" className="brand">
-          <span className="brand-mark text-2xl">✳</span>
+          <span className="brand-mark text-2xl"><img src="/icon.svg" alt="logo" className="inline-block w-[1em] h-[1em]" /></span>
           <span><strong>MYLO</strong><small>[marketing dossier]</small></span>
         </Link>
         <div className="nav-actions">

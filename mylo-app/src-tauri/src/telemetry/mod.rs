@@ -1,15 +1,25 @@
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Emitter};
 use std::time::Duration;
 use tokio::time::sleep;
 
+pub mod event_hooks_macos;
+pub mod event_hooks_windows;
+
 #[derive(serde::Serialize, Clone)]
-struct TelemetryPayload {
-    active_app: String,
-    idle_time_secs: u64,
+pub struct TelemetryPayload {
+    pub active_app: String,
+    pub idle_time_secs: u64,
 }
 
-#[cfg(not(target_os = "macos"))]
-pub fn start_telemetry(_app: AppHandle) {}
+#[cfg(target_os = "windows")]
+pub fn start_telemetry(app: AppHandle) {
+    event_hooks_windows::init_event_hooks(app.clone());
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+pub fn start_telemetry(app: AppHandle) {
+    let _ = app;
+}
 
 #[cfg(target_os = "macos")]
 #[link(name = "CoreGraphics", kind = "framework")]
@@ -31,9 +41,9 @@ fn get_idle_seconds() -> u64 {
 
 #[cfg(target_os = "macos")]
 fn get_frontmost_app_name() -> String {
-    use objc::{class, msg_send, runtime::Object, sel, sel_impl};
+    use objc::{class, msg_send, runtime::Object, sel, sel_impl, rc::autoreleasepool};
 
-    unsafe {
+    autoreleasepool(|| unsafe {
         let workspace: *mut Object = msg_send![class!(NSWorkspace), sharedWorkspace];
         if workspace.is_null() {
             return String::new();
@@ -54,11 +64,12 @@ fn get_frontmost_app_name() -> String {
             .to_string_lossy()
             .trim()
             .to_string()
-    }
+    })
 }
 
 #[cfg(target_os = "macos")]
 pub fn start_telemetry(app: AppHandle) {
+    event_hooks_macos::init_event_hooks(app.clone());
     tauri::async_runtime::spawn(async move {
         loop {
             sleep(Duration::from_secs(5)).await;
@@ -68,11 +79,7 @@ pub fn start_telemetry(app: AppHandle) {
 
             // If idle >= 60s and app is a developer environment (VSCode, Cursor, Xcode, etc.)
             if idle_secs >= 60 && matches!(app_name.as_str(), "Code" | "Cursor" | "Xcode" | "iTerm2" | "Terminal") {
-                let _ = crate::ipc::position_overlay_on_active_monitor(&app);
-                if let Some(window) = app.get_webview_window("overlay") {
-                    let _ = window.show();
-                    let _ = window.set_ignore_cursor_events(false);
-                }
+                let _ = crate::ipc::toggle_overlay(app.clone(), true, false);
 
                 let _ = app.emit("telemetry_trigger", TelemetryPayload {
                     active_app: app_name.clone(),

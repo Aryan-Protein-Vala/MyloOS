@@ -420,7 +420,7 @@ pub async fn capture_crop_async(
 
     #[cfg(target_os = "macos")]
     {
-        return mac::capture(x, y, width, height).await;
+        mac::capture(x, y, width, height).await
     }
 
     #[cfg(not(any(target_os = "windows", target_os = "macos")))]

@@ -8,6 +8,11 @@ pub mod input_injector;
 pub mod platform_macos;
 pub mod state;
 pub mod telemetry;
+pub mod orchestrator;
+pub mod ui_snapper;
+pub mod security;
+pub mod db;
+pub mod prompts;
 
 use tauri::{Manager, menu::{MenuBuilder, MenuItemBuilder}, tray::TrayIconBuilder};
 
@@ -25,6 +30,7 @@ pub fn run() {
         .manage(state::AppState::default())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_log::Builder::new().build())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             ipc::toggle_overlay,
             ipc::save_api_key,
@@ -38,11 +44,13 @@ pub fn run() {
             ipc::set_overlay_mode,
             ipc::approve_do_action,
             ipc::cancel_do_action,
+            ipc::dismiss,
             ipc::capture_screen_crop,
             ipc::set_overlay_interactive,
             ipc::verify_stream_safety,
             ipc::execute_do_action,
             ipc::ask_ai,
+            ipc::get_chat_history,
             ipc::analyze_for_do_mode,
             ipc::execute_agentic_action,
             ipc::execute_agentic_chain,
@@ -51,6 +59,8 @@ pub fn run() {
             ipc::check_permissions,
             ipc::request_accessibility_permissions,
             ipc::request_screen_recording_permissions,
+            ipc::get_active_agents,
+            ipc::get_chat_history,
         ])
         .setup(|app| {
             // ── Overlay window: make it click-through, topmost, and stream-safe ──
@@ -84,6 +94,9 @@ pub fn run() {
             // ── Start Native OS Telemetry Loop ──
             telemetry::start_telemetry(app.handle().clone());
 
+            // ── Initialize Chat History DB ──
+            let _ = db::init_db(app.handle());
+
             // ── System Tray ──
             let quit_item = MenuItemBuilder::with_id("quit", "Quit MYLO").build(app)?;
             let menu = MenuBuilder::new(app).items(&[&quit_item]).build()?;
@@ -111,15 +124,26 @@ pub fn run() {
         })
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
-        .run(|app_handle, event| match event {
-            tauri::RunEvent::WindowEvent { label, event: tauri::WindowEvent::CloseRequested { api, .. }, .. } => {
-                if label == "main" || label == "overlay" {
+        .run(|app_handle, event| {
+            match event {
+                tauri::RunEvent::Exit | tauri::RunEvent::ExitRequested { .. } => {
+                    let state = app_handle.state::<state::AppState>();
+                    let mut agents = state.active_agents.lock().unwrap_or_else(|p| p.into_inner());
+                    for (_, handle) in agents.drain() {
+                        handle.abort();
+                    }
+                }
+                tauri::RunEvent::WindowEvent {
+                    label,
+                    event: tauri::WindowEvent::CloseRequested { api, .. },
+                    ..
+                } if label == "main" || label == "overlay" => {
                     api.prevent_close();
                     if let Some(window) = app_handle.get_webview_window(&label) {
                         let _ = window.hide();
                     }
                 }
+                _ => {}
             }
-            _ => {}
         });
 }

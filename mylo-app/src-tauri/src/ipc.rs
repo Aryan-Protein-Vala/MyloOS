@@ -80,12 +80,25 @@ fn desktop_bounds(app: &AppHandle) -> Result<DesktopBounds, String> {
     };
 
     for m in monitors {
-        let pos = m.position();
-        let size = m.size();
-        bounds.left = bounds.left.min(pos.x);
-        bounds.top = bounds.top.min(pos.y);
-        bounds.right = bounds.right.max(pos.x + size.width as i32);
-        bounds.bottom = bounds.bottom.max(pos.y + size.height as i32);
+        #[cfg(target_os = "macos")]
+        {
+            let scale = m.scale_factor();
+            let pos = m.position().to_logical::<f64>(scale);
+            let size = m.size().to_logical::<f64>(scale);
+            bounds.left = bounds.left.min(pos.x.round() as i32);
+            bounds.top = bounds.top.min(pos.y.round() as i32);
+            bounds.right = bounds.right.max((pos.x + size.width).round() as i32);
+            bounds.bottom = bounds.bottom.max((pos.y + size.height).round() as i32);
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            let pos = m.position();
+            let size = m.size();
+            bounds.left = bounds.left.min(pos.x);
+            bounds.top = bounds.top.min(pos.y);
+            bounds.right = bounds.right.max(pos.x + size.width as i32);
+            bounds.bottom = bounds.bottom.max(pos.y + size.height as i32);
+        }
     }
 
     Ok(bounds)
@@ -160,9 +173,8 @@ pub fn toggle_overlay(app_handle: AppHandle, visible: bool, click_through: bool)
         window.show().map_err(|e| e.to_string())?;
     } else {
         state.set_mode(OverlayMode::Hidden);
-        if let Ok(mut guard) = state.actions.lock() {
-            guard.disarm();
-        }
+        state.disarm();
+        *state.last_synthetic_pos.lock().unwrap_or_else(|p| p.into_inner()) = None;
         // Always restore click-through before hiding, so a later show() can
         // never come back up swallowing every click on the desktop.
         let _ = window.set_ignore_cursor_events(true);
@@ -255,6 +267,14 @@ pub fn get_platform() -> String {
 /// success on failure.
 #[command]
 pub fn save_api_key(app_handle: AppHandle, provider: String, key: String) -> Result<(), String> {
+    let norm = provider.trim().to_lowercase();
+    if !crate::storage::SUPPORTED_PROVIDERS.contains(&norm.as_str()) {
+        return Err(format!(
+            "Unsupported provider '{}'. Supported providers: {}",
+            provider,
+            crate::storage::SUPPORTED_PROVIDERS.join(", ")
+        ));
+    }
     crate::storage::save_key(&app_handle, &provider, &key)
 }
 
@@ -312,7 +332,9 @@ pub struct CaptureResult {
     pub rect: GlobalRect,
 }
 
-/// Convert overlay-relative CSS pixels into global desktop physical pixels.
+/// Convert overlay-relative CSS pixels into desktop coordinates:
+/// On macOS, enigo.move_mouse expects logical screen points, so we return logical coordinates.
+/// On other platforms, coordinates are in physical pixels.
 fn to_global_rect(
     window: &WebviewWindow,
     x: f64,
@@ -323,12 +345,26 @@ fn to_global_rect(
     let scale = window.scale_factor().map_err(|e| e.to_string())?;
     let origin = window.outer_position().map_err(|e| e.to_string())?;
 
-    Ok(GlobalRect {
-        x: origin.x + (x * scale).round() as i32,
-        y: origin.y + (y * scale).round() as i32,
-        width: (width * scale).round().max(0.0) as u32,
-        height: (height * scale).round().max(0.0) as u32,
-    })
+    #[cfg(target_os = "macos")]
+    {
+        let origin_logical = origin.to_logical::<f64>(scale);
+        Ok(GlobalRect {
+            x: (origin_logical.x + x).round() as i32,
+            y: (origin_logical.y + y).round() as i32,
+            width: width.round().max(0.0) as u32,
+            height: height.round().max(0.0) as u32,
+        })
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        Ok(GlobalRect {
+            x: origin.x + (x * scale).round() as i32,
+            y: origin.y + (y * scale).round() as i32,
+            width: (width * scale).round().max(0.0) as u32,
+            height: (height * scale).round().max(0.0) as u32,
+        })
+    }
 }
 
 #[command]
@@ -346,8 +382,25 @@ pub async fn capture_screen_crop(
         return Ok(CaptureResult { image: None, rect });
     }
 
-    let image =
-        crate::screen_capture::capture_crop_async(rect.x, rect.y, rect.width, rect.height).await?;
+    #[cfg(target_os = "macos")]
+    let (cap_x, cap_y, cap_w, cap_h) = {
+        let scale = window.scale_factor().unwrap_or(1.0);
+        (
+            (rect.x as f64 * scale).round() as i32,
+            (rect.y as f64 * scale).round() as i32,
+            (rect.width as f64 * scale).round() as u32,
+            (rect.height as f64 * scale).round() as u32,
+        )
+    };
+    #[cfg(not(target_os = "macos"))]
+    let (cap_x, cap_y, cap_w, cap_h) = (rect.x, rect.y, rect.width, rect.height);
+
+    let mut image =
+        crate::screen_capture::capture_crop_async(cap_x, cap_y, cap_w, cap_h).await?;
+
+    if let Some(img) = image {
+        image = Some(crate::security::pii_masking::mask_pii_in_image(&img)?);
+    }
 
     Ok(CaptureResult { image, rect })
 }
@@ -413,11 +466,7 @@ pub fn approve_do_action(app_handle: AppHandle, action: DoAction) -> Result<(), 
     crate::input_injector::validate(&action, bounds)?;
 
     let state = app_handle.state::<AppState>();
-    state
-        .actions
-        .lock()
-        .map_err(|_| "Action guard is poisoned".to_string())?
-        .arm();
+    state.arm();
 
     log::info!("[MYLO do] Armed action: {} — {}", action.action_type, action.description);
     Ok(())
@@ -433,11 +482,7 @@ pub fn execute_do_action(app_handle: AppHandle, action: DoAction) -> Result<(), 
 
     {
         let state = app_handle.state::<AppState>();
-        let mut guard = state
-            .actions
-            .lock()
-            .map_err(|_| "Action guard is poisoned".to_string())?;
-        guard.try_consume()?;
+        state.try_consume()?;
     }
 
     // Refuse to fire while the overlay is still on screen — the click would
@@ -463,9 +508,17 @@ pub fn execute_do_action(app_handle: AppHandle, action: DoAction) -> Result<(), 
 /// Cancel a pending approval. Wired to Reject and to the panic hotkey.
 #[command]
 pub fn cancel_do_action(app_handle: AppHandle) {
-    if let Ok(mut guard) = app_handle.state::<AppState>().actions.lock() {
-        guard.disarm();
-    }
+    let state = app_handle.state::<AppState>();
+    state.disarm();
+    *state.last_synthetic_pos.lock().unwrap_or_else(|p| p.into_inner()) = None;
+}
+
+/// Dismiss the overlay and reset state.
+#[command]
+pub fn dismiss(app_handle: AppHandle) -> Result<(), String> {
+    let state = app_handle.state::<AppState>();
+    *state.last_synthetic_pos.lock().unwrap_or_else(|p| p.into_inner()) = None;
+    toggle_overlay(app_handle, false, true)
 }
 
 /// Execute an action in an automated Agentic loop without manual approval.
@@ -481,14 +534,24 @@ pub fn execute_agentic_action(app_handle: AppHandle, action: DoAction) -> Result
     let bounds = desktop_bounds(&app_handle)?;
     crate::input_injector::validate(&action, bounds)?;
 
+    // Hardware Mouse Fight Detection for single agentic actions
+    let prev_pos = *state.last_synthetic_pos.lock().unwrap_or_else(|p| p.into_inner());
+    if let Some((ex, ey)) = prev_pos {
+        use enigo::{Enigo, Mouse};
+        if let Ok(enigo) = Enigo::new(&enigo::Settings::default()) {
+            if let Ok((actual_x, actual_y)) = enigo.location() {
+                if (actual_x - ex).abs() > 15 || (actual_y - ey).abs() > 15 {
+                    *state.last_synthetic_pos.lock().unwrap_or_else(|p| p.into_inner()) = None;
+                    return Err("Agent aborted: detected manual mouse movement. User took control.".into());
+                }
+            }
+        }
+    }
+
     // Programmatically arm and consume the rate-limiter guard
     {
-        let mut guard = state
-            .actions
-            .lock()
-            .map_err(|_| "Action guard is poisoned".to_string())?;
-        guard.arm();
-        guard.try_consume()?;
+        state.arm();
+        state.try_consume()?;
     }
 
     // Ensure overlay is set to click-through so the input hits the desktop app beneath
@@ -504,7 +567,17 @@ pub fn execute_agentic_action(app_handle: AppHandle, action: DoAction) -> Result
     let result = crate::input_injector::execute_action(&action, bounds);
 
     match &result {
-        Ok(()) => log::info!("[MYLO agentic] Executed: {} — {}", action.action_type, action.description),
+        Ok(()) => {
+            log::info!("[MYLO agentic] Executed: {} — {}", action.action_type, action.description);
+            // Query actual hardware cursor location to record the true injected coordinates.
+            // This prevents false-positive mouse fight aborts if ui_snapper adjusted the target coordinate.
+            use enigo::{Enigo, Mouse};
+            if let Ok(enigo) = Enigo::new(&enigo::Settings::default()) {
+                if let Ok(loc) = enigo.location() {
+                    *state.last_synthetic_pos.lock().unwrap_or_else(|p| p.into_inner()) = Some(loc);
+                }
+            }
+        }
         Err(e) => log::error!("[MYLO agentic] Failed: {} — {e}", action.action_type),
     }
 
@@ -515,39 +588,35 @@ pub fn execute_agentic_action(app_handle: AppHandle, action: DoAction) -> Result
 #[command]
 pub fn execute_agentic_chain(app_handle: AppHandle, actions: Vec<DoAction>) -> Result<(), String> {
     let state = app_handle.state::<AppState>();
-    let mut last_expected_pos: Option<(i32, i32)> = None;
 
     for action in actions {
         if state.mode() == OverlayMode::Hidden {
             return Err("Action chain aborted: overlay is hidden or panic hotkey was pressed".to_string());
         }
 
-        // Failsafe: Hardware Mouse Fight Detection
-        if let Some((expected_x, expected_y)) = last_expected_pos {
-            use enigo::{Enigo, Mouse};
-            if let Ok(enigo) = Enigo::new(&enigo::Settings::default()) {
-                if let Ok((actual_x, actual_y)) = enigo.location() {
-                    let dx = (actual_x - expected_x).abs();
-                    let dy = (actual_y - expected_y).abs();
-                    if dx > 15 || dy > 15 {
-                        return Err(format!("Agent aborted: detected manual mouse movement (delta {}px, {}px). User took control.", dx, dy));
-                    }
-                }
-            }
-        }
-
-        let next_x = action.x;
-        let next_y = action.y;
-
         execute_agentic_action(app_handle.clone(), action)?;
-        
-        if let (Some(x), Some(y)) = (next_x, next_y) {
-            last_expected_pos = Some((x, y));
-        }
 
         std::thread::sleep(std::time::Duration::from_millis(350));
     }
     Ok(())
+}
+
+#[derive(Serialize)]
+pub struct ActiveAgentPayload {
+    pub id: String,
+    pub name: String,
+    pub status: String,
+}
+
+#[command]
+pub fn get_active_agents(app_handle: AppHandle) -> Vec<ActiveAgentPayload> {
+    let state = app_handle.state::<AppState>();
+    let agents = state.active_agents.lock().unwrap_or_else(|p| p.into_inner());
+    agents.keys().map(|id| ActiveAgentPayload {
+        id: id.clone(),
+        name: "Headless Web Agent".into(),
+        status: "running".into(),
+    }).collect()
 }
 
 async fn call_gemini_ask(
@@ -633,7 +702,7 @@ pub async fn ask_ai(app_handle: tauri::AppHandle, prompt: String, base64_image: 
         return Ok("Error: Please set your Gemini or OpenAI API key in MYLO settings.".into());
     }
 
-    let system_prompt = "You are MYLO, an invisible AI overlay assistant running on the user's desktop.\nYou see a cropped screenshot of what the user circled.\nAnswer concisely (2-4 sentences max). Be direct and useful.";
+    let system_prompt = crate::prompts::ASK_MODE_SYSTEM_PROMPT;
     let user_prompt = format!("User question: {}", if prompt.is_empty() { "What is this?" } else { &prompt });
 
     let client = reqwest::Client::new();
@@ -654,7 +723,11 @@ pub async fn ask_ai(app_handle: tauri::AppHandle, prompt: String, base64_image: 
             };
 
             match res {
-                Ok(text) => return Ok(text),
+                Ok(text) => {
+                    let _ = crate::db::insert_message(&app_handle, "user", &user_prompt);
+                    let _ = crate::db::insert_message(&app_handle, "assistant", &text);
+                    return Ok(text);
+                }
                 Err(err) => {
                     eprintln!("[MYLO AI ask] Provider {} failed: {}", p, err);
                     last_error = err;
@@ -668,6 +741,11 @@ pub async fn ask_ai(app_handle: tauri::AppHandle, prompt: String, base64_image: 
     } else {
         format!("All providers failed. Last error: {}", last_error)
     })
+}
+
+#[command]
+pub fn get_chat_history(app_handle: AppHandle, limit: Option<usize>) -> Result<Vec<crate::db::ChatMessage>, String> {
+    crate::db::get_recent_messages(&app_handle, limit.unwrap_or(50)).map_err(|e| e.to_string())
 }
 
 async fn call_gemini_do(
@@ -779,7 +857,7 @@ pub async fn analyze_for_do_mode(
     // know the crop's offset on the desktop or how far it was downscaled before
     // being sent. The caller converts the ratios back to global physical pixels
     // using the rect that `capture_screen_crop` actually captured.
-    let system_prompt = "You are MYLO, an AI that controls a user's computer via approved actions.\nAnalyze the screenshot and the user's intent. Return ONLY a JSON object with this exact shape:\n{\n  \"actionType\": \"click\" | \"doubleClick\" | \"rightClick\" | \"move\" | \"type\" | \"scroll\",\n  \"status\": \"running\" | \"complete\",\n  \"ratioX\": <float between 0.0 and 1.0 for the X coordinate in the image, or null>,\n  \"ratioY\": <float between 0.0 and 1.0 for the Y coordinate in the image, or null>,\n  \"text\": <string to type, or null>,\n  \"scrollAmount\": <integer notches, positive scrolls down, or null>,\n  \"description\": \"<one sentence: what this action will do>\"\n}\nIf this is the final action needed to complete the user's goal or no more actions are required, set \"status\": \"complete\". If further steps are needed, set \"status\": \"running\".\nIf you cannot safely determine an action, return: {\"actionType\":\"none\",\"status\":\"complete\",\"description\":\"Cannot determine safe action\"}";
+    let system_prompt = crate::prompts::DO_MODE_SYSTEM_PROMPT;
 
     let client = reqwest::Client::new();
 
@@ -864,10 +942,7 @@ pub fn kill_headless_agent(
 
     let state = app_handle.state::<AppState>();
     let abort_handle = {
-        let mut active = state
-            .active_agents
-            .lock()
-            .map_err(|_| "Active agents lock is poisoned".to_string())?;
+        let mut active = state.active_agents.lock().unwrap_or_else(|p| p.into_inner());
         active.remove(&agent_id)
     };
 
@@ -894,69 +969,19 @@ pub async fn spawn_headless_agent(
     agent_id: String,
     task: String,
 ) -> Result<(), String> {
-    use tauri::Emitter;
-    use std::time::Duration;
-
     let app_clone = app.clone();
     let agent_id_clone = agent_id.clone();
 
-    // Spawn a background Tokio task to simulate a running agent
     let join_handle = tokio::spawn(async move {
-        let emit_log = |msg: &str| {
-            let _ = app_clone.emit("agent_log", AgentLogPayload {
-                agent_id: agent_id_clone.clone(),
-                message: msg.to_string(),
-            });
-        };
-
-        emit_log(&format!("Initialization sequence started for task: '{}'...", task));
-        tokio::time::sleep(Duration::from_secs(1)).await;
-
-        emit_log("Spawning headless Chromium instance (Puppeteer/Playwright)");
-        tokio::time::sleep(Duration::from_millis(800)).await;
-
-        emit_log("SUCCESS: Browser spawned (PID: 8492)");
-        tokio::time::sleep(Duration::from_secs(1)).await;
-
-        emit_log("Navigating to https://linkedin.com/search/results/people/");
-        tokio::time::sleep(Duration::from_secs(2)).await;
-
-        emit_log("Injecting session cookies...");
-        tokio::time::sleep(Duration::from_millis(500)).await;
-
-        emit_log("Applying filters: 'Founder', 'San Francisco', 'AI'");
-        tokio::time::sleep(Duration::from_secs(2)).await;
-
-        emit_log("AGENT REASONING: Found 10 profiles. Extracting data via DOM tree traversal.");
-        tokio::time::sleep(Duration::from_secs(1)).await;
-
-        emit_log("Extracted: Sarah Jenkins (CEO @ TechFlow)");
-        tokio::time::sleep(Duration::from_millis(300)).await;
-        emit_log("Extracted: Mark Zhang (Founder @ DataMesh)");
-        tokio::time::sleep(Duration::from_millis(300)).await;
-
-        emit_log("Clicking 'Next Page'...");
-        tokio::time::sleep(Duration::from_secs(1)).await;
-        emit_log("Waiting for network idle (500ms)...");
-
-        // When the task finishes emitting logs, emit agent_status event with { agent_id, status: "completed" }
-        // and remove it from state.active_agents
-        let _ = app_clone.emit("agent_status", AgentStatusPayload {
-            agent_id: agent_id_clone.clone(),
-            status: "completed".to_string(),
-        });
-
+        crate::orchestrator::worker::run_worker_task(app_clone.clone(), agent_id_clone.clone(), task).await;
+        
         let state = app_clone.state::<AppState>();
-        if let Ok(mut active) = state.active_agents.lock() {
-            active.remove(&agent_id_clone);
-        };
+        let mut active = state.active_agents.lock().unwrap_or_else(|p| p.into_inner());
+        active.remove(&agent_id_clone);
     });
 
     let state = app.state::<AppState>();
-    let mut active = state
-        .active_agents
-        .lock()
-        .map_err(|_| "Active agents lock is poisoned".to_string())?;
+    let mut active = state.active_agents.lock().unwrap_or_else(|p| p.into_inner());
     active.insert(agent_id, join_handle.abort_handle());
 
     Ok(())

@@ -65,9 +65,30 @@ pub fn delete_key(_app: &AppHandle, provider: &str) -> Result<(), String> {
 pub fn stored_providers(_app: &AppHandle) -> Vec<String> {
     let mut providers = Vec::new();
     for p in SUPPORTED_PROVIDERS {
-        if let Some(_) = get_key(_app, p) {
+        if get_key(_app, p).is_some() {
             providers.push(p.to_string());
         }
     }
     providers
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn supported_providers_contains_expected() {
+        assert!(SUPPORTED_PROVIDERS.contains(&"gemini"));
+        assert!(SUPPORTED_PROVIDERS.contains(&"openai"));
+        assert!(SUPPORTED_PROVIDERS.contains(&"groq"));
+        assert!(SUPPORTED_PROVIDERS.contains(&"sarvam"));
+        assert_eq!(SUPPORTED_PROVIDERS.len(), 4);
+    }
+
+    #[test]
+    fn provider_normalization() {
+        assert_eq!(normalize_provider("  GEMINI  "), "gemini");
+        assert_eq!(normalize_provider("OpenAI"), "openai");
+        assert_eq!(normalize_provider("groq\n"), "groq");
+    }
 }

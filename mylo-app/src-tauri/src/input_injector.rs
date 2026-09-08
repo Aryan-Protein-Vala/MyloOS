@@ -187,6 +187,12 @@ pub fn execute_action(action: &DoAction, bounds: DesktopBounds) -> Result<(), St
         if x == 0 && y == 0 {
             return Err("Corner failsafe triggered: target is (0, 0)".to_string());
         }
+        
+        if let Some((nx, ny)) = crate::ui_snapper::snap_to_element(x, y) {
+            log::info!("[MYLO snap] Vision target snapped from ({}, {}) to native center ({}, {})", x, y, nx, ny);
+            return Ok((nx, ny));
+        }
+
         Ok((x, y))
     };
 
@@ -212,7 +218,11 @@ pub fn execute_action(action: &DoAction, bounds: DesktopBounds) -> Result<(), St
         }
         "type" => {
             let text = action.text.as_deref().ok_or("missing text")?;
-            enigo.text(text).map_err(|e| e.to_string())?;
+            let sanitized: String = text.chars().filter(|&c| c != '\r' && c != '\n').collect();
+            if sanitized.is_empty() {
+                return Ok(());
+            }
+            enigo.text(&sanitized).map_err(|e| e.to_string())?;
         }
         "scroll" => {
             // If a point was supplied, move there first so the scroll lands on
@@ -343,6 +353,17 @@ mod tests {
         assert!(BOUNDS.contains(0, 0));
         assert!(!BOUNDS.contains(1920, 0));
         assert!(!BOUNDS.contains(0, 1080));
+    }
+
+    #[test]
+    fn type_newlines_only_returns_ok_or_failsafe() {
+        let mut a = action("type");
+        a.text = Some("\r\n\n\r".to_string());
+        assert!(validate(&a, BOUNDS).is_ok());
+        let res = execute_action(&a, BOUNDS);
+        if let Err(e) = res {
+            assert!(e.contains("Could not access the input system") || e.contains("Corner failsafe"));
+        }
     }
 }
 

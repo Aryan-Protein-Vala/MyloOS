@@ -20,6 +20,8 @@ export default function Orchestrator() {
   const [logs, setLogs] = useState<{ time: string, msg: string }[]>([])
   const [isRunning, setIsRunning] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [taskPrompt, setTaskPrompt] = useState('Scrape Lead Gen (LinkedIn)')
+  const [currentAgentId, setCurrentAgentId] = useState<string | null>(null)
   const logsEndRef = useRef<HTMLDivElement>(null)
   const terminalContainerRef = useRef<HTMLDivElement>(null)
 
@@ -45,7 +47,7 @@ export default function Orchestrator() {
     }
 
     const setupListeners = async () => {
-      if (typeof window !== 'undefined' && (window as any).__TAURI_INTERNALS__) {
+      if (typeof window !== 'undefined' && (window as unknown as { __TAURI_INTERNALS__: unknown }).__TAURI_INTERNALS__) {
         try {
           const uLog = await listen<LogPayload>('agent_log', (event) => {
             const timeString = formatTimestamp()
@@ -59,7 +61,7 @@ export default function Orchestrator() {
 
           const uStatus = await listen<StatusPayload>('agent_status', (event) => {
             const status = event.payload.status
-            if (status === 'completed' || status === 'killed') {
+            if (status === 'completed' || status === 'killed' || status === 'error') {
               setIsRunning(false)
               const timeString = formatTimestamp()
               setLogs(prev => [
@@ -88,15 +90,17 @@ export default function Orchestrator() {
   }, [])
 
   const handleSpawn = async () => {
+    const agentId = `agent-${Date.now().toString(36).slice(-5).toUpperCase()}`
+    setCurrentAgentId(agentId)
     setIsRunning(true)
     const now = new Date()
     const timeString = `[${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}]`
-    setLogs(prev => [...prev, { time: timeString, msg: '--- SPAWNING NEW HEADLESS AGENT ---' }].slice(-300))
+    setLogs(prev => [...prev, { time: timeString, msg: `--- SPAWNING NEW HEADLESS AGENT (${agentId}) ---` }].slice(-300))
     try {
-      if (typeof window !== 'undefined' && (window as any).__TAURI_INTERNALS__) {
+      if (typeof window !== 'undefined' && (window as unknown as { __TAURI_INTERNALS__: unknown }).__TAURI_INTERNALS__) {
         await invoke('spawn_headless_agent', { 
-          agentId: '894F-2A', 
-          task: 'Scrape Lead Gen (LinkedIn)' 
+          agentId, 
+          task: taskPrompt.trim() || 'Scrape Lead Gen (LinkedIn)' 
         })
       }
     } catch (e) {
@@ -107,12 +111,13 @@ export default function Orchestrator() {
 
   const handleKill = async () => {
     setIsRunning(false)
+    const agentId = currentAgentId || '894F-2A'
     const now = new Date()
     const timeString = `[${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}]`
-    setLogs(prev => [...prev, { time: timeString, msg: '--- KILL SIGNAL DISPATCHED (894F-2A) ---' }].slice(-300))
+    setLogs(prev => [...prev, { time: timeString, msg: `--- KILL SIGNAL DISPATCHED (${agentId}) ---` }].slice(-300))
     try {
-      if (typeof window !== 'undefined' && (window as any).__TAURI_INTERNALS__) {
-        await invoke('kill_headless_agent', { agentId: '894F-2A' })
+      if (typeof window !== 'undefined' && (window as unknown as { __TAURI_INTERNALS__: unknown }).__TAURI_INTERNALS__) {
+        await invoke('kill_headless_agent', { agentId })
       }
     } catch (e) {
       console.error('Error killing headless agent:', e)
@@ -160,7 +165,7 @@ export default function Orchestrator() {
           Background <em>Orchestrator</em>.
         </h1>
         <p className="lede">
-          MYLO isn't just a foreground pointer anymore. Spawn headless HTTP browser agents that run completely unseen.
+          MYLO isn&apos;t just a foreground pointer anymore. Spawn headless HTTP browser agents that run completely unseen.
         </p>
       </section>
 
@@ -178,20 +183,36 @@ export default function Orchestrator() {
                 </span>
               </div>
 
+              {/* Custom Task Prompt Input */}
+              <div className="bg-white border-2 border-[var(--ink)] rounded-[6px_3px_8px_4px] p-3.5 shadow-[3px_3px_0_var(--ink)] flex flex-col gap-1.5">
+                <label htmlFor="task-prompt-input" className="text-xs font-bold font-['Courier_New'] text-[var(--ink)] uppercase tracking-wide">
+                  Task Prompt
+                </label>
+                <input
+                  id="task-prompt-input"
+                  type="text"
+                  value={taskPrompt}
+                  onChange={(e) => setTaskPrompt(e.target.value)}
+                  placeholder="e.g. Scrape Lead Gen (LinkedIn)"
+                  disabled={isRunning}
+                  className="w-full bg-[var(--paper)] border-2 border-[var(--ink)] px-3 py-2 text-xs font-mono rounded shadow-[2px_2px_0_var(--ink)] focus:outline-none focus:ring-2 focus:ring-[var(--blue)] disabled:opacity-60"
+                />
+              </div>
+
               {/* Agent 1 */}
               <div className={`bg-white border-2 border-[var(--ink)] rounded-[6px_3px_8px_4px] p-4 shadow-[3px_3px_0_var(--ink)] hover:-translate-y-1 hover:shadow-[5px_5px_0_var(--ink)] transition-all transform ${isRunning ? '-rotate-1 opacity-100' : 'rotate-1 opacity-50'}`}>
                 <div className="flex items-center justify-between mb-2">
                   <span className="font-['Courier_New'] text-xs font-bold text-[var(--ink)] flex items-center gap-2">
-                    <Globe size={12} className="text-[var(--blue)]" /> ID: 894F-2A
+                    <Globe size={12} className="text-[var(--blue)]" /> ID: {currentAgentId || 'READY'}
                   </span>
                   <span className={`w-2 h-2 rounded-full border border-[var(--ink)] ${isRunning ? 'bg-[var(--green)] animate-pulse' : 'bg-gray-400'}`}></span>
                 </div>
-                <strong className="block text-sm mb-2">Scrape Lead Gen (LinkedIn)</strong>
+                <strong className="block text-sm mb-2 break-words">{taskPrompt.trim() || 'Scrape Lead Gen (LinkedIn)'}</strong>
                 {isRunning && (
                   <div className="flex gap-2">
                     <button 
                       onClick={handleKill}
-                      className="flex-1 bg-[var(--paper)] border-2 border-[var(--ink)] rounded-[5px_3px_6px_4px] py-1 text-xs font-bold font-['Courier_New'] text-[var(--red)] hover:bg-[var(--red)] hover:text-white transition-colors flex items-center justify-center gap-1"
+                      className="flex-1 bg-[var(--paper)] border-2 border-[var(--ink)] rounded-[5px_3px_6px_4px] py-1 text-xs font-bold font-['Courier_New'] text-[var(--red)] hover:bg-[var(--red)] hover:text-white transition-colors flex items-center justify-center gap-1 cursor-pointer"
                     >
                       <Square size={12} /> KILL
                     </button>

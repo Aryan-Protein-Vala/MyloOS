@@ -1,12 +1,14 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useSyncExternalStore, useCallback } from 'react'
 import Link from 'next/link'
-import { Sparkles, MousePointer2, Mic, Volume2, Save, ShieldCheck, Check } from 'lucide-react'
+import { Sparkles, MousePointer2, Mic, Volume2, Save, ShieldCheck, Check, ExternalLink } from 'lucide-react'
 import { RoughArrow, PencilLoop } from '@/components/ui/design-system'
 import { invoke } from '@tauri-apps/api/core'
 
 type Provider = 'gemini' | 'openai' | 'groq' | 'sarvam'
+
+const emptySubscribe = () => () => {}
 
 export default function AppDashboard() {
   const [apiKey, setApiKey] = useState('')
@@ -16,17 +18,54 @@ export default function AppDashboard() {
   const [status, setStatus] = useState<{ type: 'success' | 'error'; msg: string } | null>(null)
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
-  const [mounted, setMounted] = useState(false)
+  const mounted = useSyncExternalStore(emptySubscribe, () => true, () => false)
   
   // Permissions State
   const [permissions, setPermissions] = useState<{ accessibility: boolean, screen_recording: boolean }>({
     accessibility: true,
     screen_recording: true
   })
+  const [micPermission, setMicPermission] = useState<boolean>(true)
+  const [micChecking, setMicChecking] = useState<boolean>(false)
+
+  const checkMicrophonePermission = async () => {
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
+      setMicPermission(false)
+      return
+    }
+    setMicChecking(true)
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+      })
+      stream.getTracks().forEach((track) => track.stop())
+      setMicPermission(true)
+    } catch (err) {
+      console.warn('Microphone permission check failed:', err)
+      setMicPermission(false)
+    } finally {
+      setMicChecking(false)
+    }
+  }
+
+  const openSystemSettings = (pane?: string) => {
+    const url = pane
+      ? `x-apple.systempreferences:com.apple.preference.security?${pane}`
+      : 'x-apple.systempreferences:com.apple.preference.security?Privacy'
+    try {
+      window.location.href = url
+    } catch (e) {
+      console.error('Failed to open system settings via deep link:', e)
+    }
+  }
   
   const isMac = typeof navigator !== 'undefined' ? navigator.userAgent.includes('Mac') : true
 
-  const refreshSaved = async () => {
+  const refreshSaved = useCallback(async () => {
     if (typeof window !== 'undefined' && (window as unknown as { __TAURI_INTERNALS__: unknown }).__TAURI_INTERNALS__) {
       try {
         const list = await invoke<string[]>('list_saved_providers')
@@ -35,10 +74,36 @@ export default function AppDashboard() {
         console.error('Failed to list saved providers:', err)
       }
     }
-  }
+  }, [])
 
   useEffect(() => {
-    setMounted(true)
+    // Check microphone permission via device labels or permissions API
+    if (typeof navigator !== 'undefined' && navigator.mediaDevices?.enumerateDevices) {
+      navigator.mediaDevices.enumerateDevices().then((devices) => {
+        const hasAudioInputWithLabel = devices.some(
+          (device) => device.kind === 'audioinput' && device.label !== ''
+        )
+        if (hasAudioInputWithLabel) {
+          setMicPermission(true)
+        }
+      }).catch(() => {})
+    }
+
+    if (typeof navigator !== 'undefined' && navigator.permissions?.query) {
+      navigator.permissions.query({ name: 'microphone' as PermissionName })
+        .then((status) => {
+          if (status.state === 'denied') {
+            setMicPermission(false)
+          } else if (status.state === 'granted') {
+            setMicPermission(true)
+          }
+          status.onchange = () => {
+            setMicPermission(status.state === 'granted')
+          }
+        })
+        .catch(() => {})
+    }
+
     if (typeof window !== 'undefined' && (window as unknown as { __TAURI_INTERNALS__: unknown }).__TAURI_INTERNALS__) {
       invoke<string>('get_active_provider')
         .then((p) => {
@@ -48,7 +113,11 @@ export default function AppDashboard() {
         })
         .catch(console.error)
 
-      refreshSaved().catch(console.error)
+      invoke<string[]>('list_saved_providers')
+        .then((list) => {
+          setSavedProviders(list || [])
+        })
+        .catch(console.error)
       
       // Permissions poll loop
       const checkPerms = () => {
@@ -160,12 +229,12 @@ export default function AppDashboard() {
       </section>
 
       {/* Permissions Onboarding */}
-      {(!permissions.accessibility || !permissions.screen_recording) && (
+      {(!permissions.accessibility || !permissions.screen_recording || !micPermission) && (
         <section className="mode-panel bg-[var(--yellow)] mb-12 border-[3px] border-[var(--ink)]">
           <div className="mode-text w-full">
             <span className="eyebrow flex items-center gap-2"><ShieldCheck size={16} /> REQUIRED SETUP</span>
             <h3>Grant System Permissions</h3>
-            <p className="opacity-80">MYLO needs OS-level permissions to see your screen and inject physics (mouse clicks). He cannot operate without these.</p>
+            <p className="opacity-80">MYLO needs OS-level permissions to see your screen, inject physics (mouse clicks), and capture voice commands. He cannot operate without these.</p>
             
             <div className="mt-6 flex flex-col gap-4">
               <div className="flex items-center justify-between bg-white border-2 border-[var(--ink)] p-4 rounded-xl shadow-[4px_4px_0_var(--ink)]">
@@ -177,12 +246,21 @@ export default function AppDashboard() {
                   <p className="text-sm opacity-70 m-0">Required for hardware mouse clicking.</p>
                 </div>
                 {!permissions.accessibility ? (
-                  <button 
-                    onClick={() => invoke('request_accessibility_permissions')}
-                    className="ink-button bg-[var(--red)] text-white text-xs px-4 py-2 hover:scale-105"
-                  >
-                    Grant Access
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button 
+                      onClick={() => invoke('request_accessibility_permissions')}
+                      className="ink-button bg-[var(--red)] text-white text-xs px-4 py-2 hover:scale-105"
+                    >
+                      Grant Access
+                    </button>
+                    <button
+                      onClick={() => openSystemSettings('Privacy_Accessibility')}
+                      className="border-2 border-[var(--ink)] bg-[var(--paper)] hover:bg-white text-[var(--ink)] text-xs font-mono font-bold px-3 py-2 rounded flex items-center gap-1 shadow-[2px_2px_0_var(--ink)] cursor-pointer"
+                      title="Open Accessibility in System Settings"
+                    >
+                      <ExternalLink size={12} /> Settings
+                    </button>
+                  </div>
                 ) : (
                   <span className="text-green-600 font-bold font-mono text-sm px-4">GRANTED</span>
                 )}
@@ -194,20 +272,82 @@ export default function AppDashboard() {
                     Screen Recording
                     {permissions.screen_recording && <Check size={16} className="text-green-600" />}
                   </h4>
-                  <p className="text-sm opacity-70 m-0">Required for MYLO's Vision engine.</p>
+                  <p className="text-sm opacity-70 m-0">Required for MYLO&apos;s Vision engine.</p>
                 </div>
                 {!permissions.screen_recording ? (
-                  <button 
-                    onClick={() => invoke('request_screen_recording_permissions')}
-                    className="ink-button bg-[var(--red)] text-white text-xs px-4 py-2 hover:scale-105"
-                  >
-                    Grant Access
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button 
+                      onClick={() => invoke('request_screen_recording_permissions')}
+                      className="ink-button bg-[var(--red)] text-white text-xs px-4 py-2 hover:scale-105"
+                    >
+                      Grant Access
+                    </button>
+                    <button
+                      onClick={() => openSystemSettings('Privacy_ScreenCapture')}
+                      className="border-2 border-[var(--ink)] bg-[var(--paper)] hover:bg-white text-[var(--ink)] text-xs font-mono font-bold px-3 py-2 rounded flex items-center gap-1 shadow-[2px_2px_0_var(--ink)] cursor-pointer"
+                      title="Open Screen Recording in System Settings"
+                    >
+                      <ExternalLink size={12} /> Settings
+                    </button>
+                  </div>
+                ) : (
+                  <span className="text-green-600 font-bold font-mono text-sm px-4">GRANTED</span>
+                )}
+              </div>
+
+              {/* Microphone Check */}
+              <div className="flex items-center justify-between bg-white border-2 border-[var(--ink)] p-4 rounded-xl shadow-[4px_4px_0_var(--ink)]">
+                <div>
+                  <h4 className="font-bold font-mono m-0 flex items-center gap-2">
+                    Microphone
+                    {micPermission && <Check size={16} className="text-green-600" />}
+                  </h4>
+                  <p className="text-sm opacity-70 m-0">Required for voice commands &amp; Push-to-Talk (PTT).</p>
+                </div>
+                {!micPermission ? (
+                  <div className="flex items-center gap-2">
+                    <button 
+                      onClick={checkMicrophonePermission}
+                      disabled={micChecking}
+                      className="ink-button bg-[var(--red)] text-white text-xs px-4 py-2 hover:scale-105 disabled:opacity-50"
+                    >
+                      {micChecking ? 'Checking...' : 'Grant Access'}
+                    </button>
+                    <button
+                      onClick={() => openSystemSettings('Privacy_Microphone')}
+                      className="border-2 border-[var(--ink)] bg-[var(--paper)] hover:bg-white text-[var(--ink)] text-xs font-mono font-bold px-3 py-2 rounded flex items-center gap-1 shadow-[2px_2px_0_var(--ink)] cursor-pointer"
+                      title="Open Microphone in System Settings"
+                    >
+                      <ExternalLink size={12} /> Settings
+                    </button>
+                  </div>
                 ) : (
                   <span className="text-green-600 font-bold font-mono text-sm px-4">GRANTED</span>
                 )}
               </div>
             </div>
+
+            {/* macOS System Settings Button & Deep Link */}
+            <div className="mt-6 pt-4 border-t-2 border-[var(--ink)]/20 flex flex-wrap items-center justify-between gap-3">
+              <p className="text-xs opacity-80 font-mono m-0">
+                Permissions denied or need reconfiguration? Open macOS Privacy &amp; Security:
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => openSystemSettings()}
+                  className="ink-button bg-[var(--ink)] text-white text-xs px-4 py-2 hover:bg-black/80 flex items-center gap-1.5 shadow-[2px_2px_0_var(--ink)] cursor-pointer"
+                >
+                  <ExternalLink size={12} /> Open System Settings
+                </button>
+                <a
+                  href="x-apple.systempreferences:com.apple.preference.security?Privacy"
+                  className="text-xs font-mono font-bold text-blue-700 underline hover:text-blue-900"
+                >
+                  Deep Link
+                </a>
+              </div>
+            </div>
+
             <p className="text-xs opacity-60 mt-4 font-mono">You may need to restart the app after granting permissions in System Settings.</p>
           </div>
         </section>

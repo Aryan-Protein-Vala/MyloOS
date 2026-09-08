@@ -81,7 +81,7 @@ impl ActionGuard {
         self.armed = false;
 
         let now = Instant::now();
-        self.recent.retain(|t| now.checked_duration_since(*t).map_or(false, |d| d < RATE_WINDOW));
+        self.recent.retain(|t| now.checked_duration_since(*t).is_some_and(|d| d < RATE_WINDOW));
         if self.recent.len() >= RATE_LIMIT {
             return Err(format!(
                 "Too many actions ({RATE_LIMIT} in {}s). Slow down or restart MYLO.",
@@ -99,17 +99,32 @@ pub struct AppState {
     pub mode: Mutex<OverlayMode>,
     pub actions: Mutex<ActionGuard>,
     pub active_agents: Mutex<std::collections::HashMap<String, tokio::task::AbortHandle>>,
+    pub last_synthetic_pos: Mutex<Option<(i32, i32)>>,
 }
 
 impl AppState {
     pub fn mode(&self) -> OverlayMode {
-        self.mode.lock().map(|m| *m).unwrap_or_default()
+        *self.mode.lock().unwrap_or_else(|p| p.into_inner())
     }
 
     pub fn set_mode(&self, mode: OverlayMode) {
-        if let Ok(mut guard) = self.mode.lock() {
-            *guard = mode;
-        }
+        let mut guard = self.mode.lock().unwrap_or_else(|p| p.into_inner());
+        *guard = mode;
+    }
+
+    pub fn arm(&self) {
+        let mut guard = self.actions.lock().unwrap_or_else(|p| p.into_inner());
+        guard.arm();
+    }
+
+    pub fn disarm(&self) {
+        let mut guard = self.actions.lock().unwrap_or_else(|p| p.into_inner());
+        guard.disarm();
+    }
+
+    pub fn try_consume(&self) -> Result<(), String> {
+        let mut guard = self.actions.lock().unwrap_or_else(|p| p.into_inner());
+        guard.try_consume()
     }
 }
 
@@ -166,5 +181,44 @@ mod tests {
     fn app_state_initializes_active_agents() {
         let state = AppState::default();
         assert!(state.active_agents.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn app_state_initializes_last_synthetic_pos() {
+        let state = AppState::default();
+        assert_eq!(*state.last_synthetic_pos.lock().unwrap(), None);
+    }
+
+    #[test]
+    fn mode_mutex_poison_recovery() {
+        let state = AppState::default();
+        // Intentionally poison the mode mutex
+        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _guard = state.mode.lock().unwrap();
+            panic!("force poison mode mutex");
+        }));
+        assert!(state.mode.is_poisoned());
+
+        // mode() and set_mode() must safely recover without bricking or staying stuck
+        assert_eq!(state.mode(), OverlayMode::Hidden);
+        state.set_mode(OverlayMode::Do);
+        assert_eq!(state.mode(), OverlayMode::Do);
+    }
+
+    #[test]
+    fn action_guard_mutex_poison_recovery() {
+        let state = AppState::default();
+        // Intentionally poison the actions mutex
+        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _guard = state.actions.lock().unwrap();
+            panic!("force poison actions mutex");
+        }));
+        assert!(state.actions.is_poisoned());
+
+        // arm() and try_consume() must safely recover without panicking
+        state.arm();
+        assert!(state.try_consume().is_ok());
+        // Consumed once, subsequent attempt is single-use error
+        assert!(state.try_consume().is_err());
     }
 }
