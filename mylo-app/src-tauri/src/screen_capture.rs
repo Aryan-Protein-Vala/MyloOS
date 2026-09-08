@@ -309,12 +309,7 @@ mod mac {
     use super::*;
     use xcap::Monitor;
 
-    /// Pick the display containing a physical desktop point.
-    ///
-    /// xcap's reported origin/size units are not consistent across platforms
-    /// and versions (points on some paths, pixels on others), so we test both
-    /// interpretations before giving up. Whichever one contains the point is
-    /// by definition the right one.
+    /// Pick the display containing a desktop point (in logical points on macOS).
     fn monitor_at(x: i32, y: i32) -> Result<Monitor, String> {
         let monitors = Monitor::all().map_err(|e| {
             format!("Could not enumerate displays. Grant Screen Recording permission in System Settings › Privacy & Security. ({e})")
@@ -324,28 +319,21 @@ mod mac {
             return Err("No displays detected".to_string());
         }
 
-        let contains = |m: &Monitor, scale: f64| -> bool {
-            let mx = (m.x().unwrap_or(0) as f64 * scale) as i32;
-            let my = (m.y().unwrap_or(0) as f64 * scale) as i32;
-            let mw = (m.width().unwrap_or(0) as f64 * scale) as i32;
-            let mh = (m.height().unwrap_or(0) as f64 * scale) as i32;
+        let contains = |m: &Monitor| -> bool {
+            let mx = m.x().unwrap_or(0);
+            let my = m.y().unwrap_or(0);
+            let mw = m.width().unwrap_or(0) as i32;
+            let mh = m.height().unwrap_or(0) as i32;
             mw > 0 && mh > 0 && x >= mx && x < mx + mw && y >= my && y < my + mh
         };
 
-        // Pass 1: treat the reported bounds as logical points.
         for m in &monitors {
-            let scale = m.scale_factor().unwrap_or(1.0) as f64;
-            if scale != 1.0 && contains(m, scale) {
+            if contains(m) {
                 return Ok(m.clone());
             }
         }
-        // Pass 2: treat them as physical pixels.
-        for m in &monitors {
-            if contains(m, 1.0) {
-                return Ok(m.clone());
-            }
-        }
-        // Neither matched — fall back to the primary display.
+
+        // Fall back to the primary display.
         if let Some(primary) = monitors.iter().find(|m| m.is_primary().unwrap_or(false)) {
             return Ok(primary.clone());
         }

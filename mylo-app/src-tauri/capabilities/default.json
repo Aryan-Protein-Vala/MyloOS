@@ -5,6 +5,7 @@
   "windows": ["main", "overlay"],
   "permissions": [
     "core:default",
+    "core:event:default",
     "core:window:allow-show",
     "core:window:allow-hide",
     "core:window:allow-set-ignore-cursor-events",
@@ -14,6 +15,7 @@
     "global-shortcut:allow-register",
     "global-shortcut:allow-unregister-all",
     "global-shortcut:allow-is-registered",
-    "log:default"
+    "log:default",
+    "updater:default"
   ]
 }

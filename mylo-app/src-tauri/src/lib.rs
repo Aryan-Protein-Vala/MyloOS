@@ -60,7 +60,6 @@ pub fn run() {
             ipc::request_accessibility_permissions,
             ipc::request_screen_recording_permissions,
             ipc::get_active_agents,
-            ipc::get_chat_history,
         ])
         .setup(|app| {
             // ── Overlay window: make it click-through, topmost, and stream-safe ──

@@ -2,7 +2,7 @@
 import Link from 'next/link'
 import { ArrowLeft, Cpu, FastForward, BrainCircuit, MousePointer2, Keyboard, CheckCircle2, Zap, Activity, MessageSquare, RefreshCw } from 'lucide-react'
 import { useEffect, useState } from 'react';
-import { getChatHistory, ChatMessage, checkForAppUpdates, installAppUpdate } from '../../lib/tauri-ipc';
+import { getChatHistory, ChatMessage, checkForAppUpdates, installAppUpdate, isTauri } from '../../lib/tauri-ipc';
 
 type UpdateStatus = 'idle' | 'checking' | 'available' | 'installing' | 'installed' | 'error';
 
@@ -17,7 +17,14 @@ export default function Dashboard() {
     setUpdateStatus('checking');
     try {
       const res = await checkForAppUpdates();
-      if (res.available && res.version) {
+      if (res.error) {
+        setUpdateStatus('error');
+        setVersionInfo(prev => ({
+          ...prev,
+          current: res.currentVersion ? (res.currentVersion.startsWith('v') ? res.currentVersion : `v${res.currentVersion}`) : prev.current,
+          message: res.error,
+        }));
+      } else if (res.available && res.version) {
         setVersionInfo({
           current: res.currentVersion.startsWith('v') ? res.currentVersion : `v${res.currentVersion}`,
           newVersion: res.version.startsWith('v') ? res.version : `v${res.version}`,
@@ -31,7 +38,8 @@ export default function Dashboard() {
       }
     } catch (err: unknown) {
       setUpdateStatus('error');
-      setVersionInfo(prev => ({ ...prev, message: 'Update check failed.' }));
+      const errMsg = err instanceof Error ? err.message : 'Update check failed.';
+      setVersionInfo(prev => ({ ...prev, message: errMsg }));
     }
   };
 
@@ -50,14 +58,27 @@ export default function Dashboard() {
   };
 
   useEffect(() => {
+    let mounted = true;
+    if (!isTauri()) return;
+
     // Poll chat history
     const interval = setInterval(async () => {
       const history = await getChatHistory(10);
-      setMessages(history);
+      if (mounted) {
+        setMessages([...history].reverse());
+      }
     }, 2000);
     
-    getChatHistory(10).then(setMessages);
-    return () => clearInterval(interval);
+    getChatHistory(10).then(history => {
+      if (mounted) {
+        setMessages([...history].reverse());
+      }
+    });
+
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
   }, []);
 
   return (
@@ -81,10 +102,11 @@ export default function Dashboard() {
           <div className="status" style={{ backgroundColor: 'var(--red)', color: 'white', borderColor: 'var(--ink)' }}>
             <Zap size={14} className="mr-2" /> V2 // GHOST IN THE MACHINE
           </div>
-          <div className="status flex items-center gap-2" style={{ backgroundColor: updateStatus === 'available' ? 'var(--yellow)' : 'var(--paper)', color: 'var(--ink)', borderColor: 'var(--ink)' }}>
+          <div className="status flex items-center gap-2" style={{ backgroundColor: updateStatus === 'available' ? 'var(--yellow)' : updateStatus === 'error' ? '#fee2e2' : 'var(--paper)', color: 'var(--ink)', borderColor: 'var(--ink)' }}>
             <span className={`w-2 h-2 rounded-full border border-[var(--ink)] ${
               updateStatus === 'checking' ? 'bg-yellow-400 animate-ping' : 
               updateStatus === 'available' ? 'bg-[var(--red)] animate-pulse' : 
+              updateStatus === 'error' ? 'bg-[var(--red)]' :
               'bg-[var(--green)]'
             }`}></span>
             <span>
@@ -92,7 +114,8 @@ export default function Dashboard() {
               {updateStatus === 'available' && `MYLO // UPDATE AVAILABLE (${versionInfo.newVersion})`}
               {updateStatus === 'installing' && 'MYLO // INSTALLING UPDATE...'}
               {updateStatus === 'installed' && 'MYLO // UPDATE INSTALLED'}
-              {(updateStatus === 'idle' || updateStatus === 'error') && `MYLO OS // ${versionInfo.current} • UP TO DATE`}
+              {updateStatus === 'idle' && `MYLO OS // ${versionInfo.current} • UP TO DATE`}
+              {updateStatus === 'error' && `MYLO // UPDATE ERROR (${versionInfo.message || 'FAILED'})`}
             </span>
           </div>
         </div>
@@ -136,6 +159,7 @@ export default function Dashboard() {
                       updateStatus === 'checking' ? 'bg-yellow-400 animate-ping' :
                       updateStatus === 'available' ? 'bg-[var(--red)] animate-pulse' :
                       updateStatus === 'installing' ? 'bg-[var(--blue)] animate-bounce' :
+                      updateStatus === 'error' ? 'bg-[var(--red)]' :
                       'bg-[var(--green)]'
                     }`}></span>
                     <span className="text-xs font-bold font-['Courier_New'] text-[var(--ink)]">
@@ -144,11 +168,11 @@ export default function Dashboard() {
                       {updateStatus === 'available' && `Update available: ${versionInfo.newVersion}`}
                       {updateStatus === 'installing' && 'Downloading & installing...'}
                       {updateStatus === 'installed' && 'Installed! Restart to apply.'}
-                      {updateStatus === 'error' && (versionInfo.message || 'Up to date')}
+                      {updateStatus === 'error' && (versionInfo.message || 'Update check failed')}
                     </span>
                   </div>
                   <span className="text-[10px] font-['Courier_New'] text-[#777]">
-                    {updateStatus === 'checking' ? 'POLLING' : 'V2 CHANNEL'}
+                    {updateStatus === 'checking' ? 'POLLING' : updateStatus === 'error' ? 'ERROR' : 'V2 CHANNEL'}
                   </span>
                 </div>
 
@@ -257,7 +281,7 @@ export default function Dashboard() {
                     </div>
                   ) : (
                     messages.map((msg, i) => (
-                      <div key={msg.id} className={`relative z-10 flex gap-4 ${i > 2 ? 'opacity-60' : ''}`}>
+                      <div key={msg.id ?? `${msg.timestamp}-${i}`} className={`relative z-10 flex gap-4 ${i > 2 ? 'opacity-60' : ''}`}>
                         <div className={`w-10 h-10 rounded-full border-2 border-[var(--ink)] flex items-center justify-center shrink-0 shadow-[2px_2px_0_var(--ink)] ${msg.role === 'user' ? 'bg-[var(--yellow)] text-[var(--ink)]' : 'bg-[var(--ink)] text-white'}`}>
                           {msg.role === 'user' ? <Keyboard size={18} /> : <BrainCircuit size={18} />}
                         </div>

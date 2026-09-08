@@ -8,7 +8,8 @@ import {
   killAgent, 
   spawnAgent, 
   AgentLogPayload, 
-  AgentStatusPayload 
+  AgentStatusPayload,
+  isTauri
 } from '../../lib/tauri-ipc';
 
 interface TerminalLog {
@@ -79,7 +80,6 @@ export default function Orchestrator() {
 
     async function registerListeners() {
       try {
-        const { isTauri } = await import('@tauri-apps/api/core');
         if (!isTauri()) return;
 
         const { listen } = await import('@tauri-apps/api/event');
@@ -107,7 +107,7 @@ export default function Orchestrator() {
           const timestamp = new Date().toTimeString().split(' ')[0];
 
           setAgents(prev => {
-            if (status === 'killed' || status === 'error') {
+            if (status === 'killed' || status === 'error' || status === 'completed') {
               return prev.filter(a => a.id !== agent_id);
             }
             const exists = prev.some(a => a.id === agent_id);
@@ -123,7 +123,7 @@ export default function Orchestrator() {
               timestamp,
               agentId: agent_id,
               message: `[STATUS] Agent ${agent_id.slice(0, 7).toUpperCase()} status changed to: ${status.toUpperCase()}`,
-              level: status === 'killed' || status === 'error' ? 'error' : 'info',
+              level: status === 'killed' || status === 'error' ? 'error' : status === 'completed' ? 'success' : 'info',
             };
             const next = [...prev, entry];
             return next.length > 300 ? next.slice(next.length - 300) : next;
@@ -144,31 +144,38 @@ export default function Orchestrator() {
 
     registerListeners();
 
-    // Poll for active agents every 2 seconds
-    const interval = setInterval(async () => {
-      const active = await getActiveAgents();
-      if (mounted && active && active.length > 0) {
-        setAgents(prev => {
-          const map = new Map(active.map(a => [a.id, a]));
-          for (const local of prev) {
-            if (!map.has(local.id) && local.status === 'running') {
-              map.set(local.id, local);
-            }
+    // Poll for active agents every 2 seconds (guarded by isTauri)
+    let interval: NodeJS.Timeout | undefined;
+    if (isTauri()) {
+      interval = setInterval(async () => {
+        const active = await getActiveAgents();
+        if (mounted && active) {
+          if (active.length === 0) {
+            setAgents([]);
+          } else {
+            setAgents(prev => {
+              const map = new Map(active.map(a => [a.id, a]));
+              for (const local of prev) {
+                if (!map.has(local.id) && local.status === 'running') {
+                  map.set(local.id, local);
+                }
+              }
+              return Array.from(map.values());
+            });
           }
-          return Array.from(map.values());
-        });
-      }
-    }, 2000);
-    
-    getActiveAgents().then(active => {
-      if (mounted && active && active.length > 0) {
-        setAgents(active);
-      }
-    });
+        }
+      }, 2000);
+      
+      getActiveAgents().then(active => {
+        if (mounted && active) {
+          setAgents(active);
+        }
+      });
+    }
 
     return () => {
       mounted = false;
-      clearInterval(interval);
+      if (interval) clearInterval(interval);
       if (unlistenLog) unlistenLog();
       if (unlistenStatus) unlistenStatus();
     };

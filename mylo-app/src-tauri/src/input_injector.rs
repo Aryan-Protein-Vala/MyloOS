@@ -189,8 +189,15 @@ pub fn execute_action(action: &DoAction, bounds: DesktopBounds) -> Result<(), St
         }
         
         if let Some((nx, ny)) = crate::ui_snapper::snap_to_element(x, y) {
-            log::info!("[MYLO snap] Vision target snapped from ({}, {}) to native center ({}, {})", x, y, nx, ny);
-            return Ok((nx, ny));
+            if bounds.contains(nx, ny) && !(nx == 0 && ny == 0) {
+                log::info!("[MYLO snap] Vision target snapped from ({}, {}) to native center ({}, {})", x, y, nx, ny);
+                return Ok((nx, ny));
+            } else {
+                log::warn!(
+                    "[MYLO snap] Snapped coordinates ({}, {}) violated bounds or failsafe, falling back to ({}, {})",
+                    nx, ny, x, y
+                );
+            }
         }
 
         Ok((x, y))
@@ -209,6 +216,7 @@ pub fn execute_action(action: &DoAction, bounds: DesktopBounds) -> Result<(), St
             enigo.button(button, Click).map_err(|e| e.to_string())?;
 
             if action.action_type == "doubleClick" {
+                std::thread::sleep(std::time::Duration::from_millis(50));
                 enigo.button(button, Click).map_err(|e| e.to_string())?;
             }
         }

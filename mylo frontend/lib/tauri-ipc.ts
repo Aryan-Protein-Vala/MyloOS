@@ -1,4 +1,6 @@
-import { invoke } from '@tauri-apps/api/core';
+import { invoke, isTauri } from '@tauri-apps/api/core';
+
+export { isTauri };
 
 export interface DoAction {
   action_type: string;
@@ -26,6 +28,7 @@ export interface CaptureResult {
 }
 
 export async function getChatHistory(limit?: number): Promise<ChatMessage[]> {
+  if (typeof window === 'undefined' || !isTauri()) return [];
   try {
     return await invoke<ChatMessage[]>('get_chat_history', { limit });
   } catch (e) {
@@ -37,10 +40,11 @@ export async function getChatHistory(limit?: number): Promise<ChatMessage[]> {
 export interface ActiveAgent {
   id: string;
   name: string;
-  status: 'running' | 'paused';
+  status: 'running' | 'paused' | 'completed' | 'killed' | 'error';
 }
 
 export async function getActiveAgents(): Promise<ActiveAgent[]> {
+  if (typeof window === 'undefined' || !isTauri()) return [];
   try {
     return await invoke<ActiveAgent[]>('get_active_agents');
   } catch (e) {
@@ -73,9 +77,8 @@ export async function checkForAppUpdates(): Promise<UpdateCheckResult> {
   }
 
   try {
-    const { isTauri } = await import('@tauri-apps/api/core');
     if (!isTauri()) {
-      return { available: false, currentVersion };
+      return { available: false, currentVersion, error: 'Updater requires Tauri desktop application' };
     }
 
     try {
@@ -113,7 +116,6 @@ export async function checkForAppUpdates(): Promise<UpdateCheckResult> {
 export async function installAppUpdate(): Promise<boolean> {
   if (typeof window === 'undefined') return false;
   try {
-    const { isTauri } = await import('@tauri-apps/api/core');
     if (!isTauri()) return false;
     const { check } = await import('@tauri-apps/plugin-updater');
     const update = await check();
@@ -128,19 +130,26 @@ export async function installAppUpdate(): Promise<boolean> {
   }
 }
 
-export async function spawnAgent(agentId: string, task: string): Promise<void> {
+export async function spawnAgent(agentId: string, task: string): Promise<boolean> {
+  if (typeof window === 'undefined' || !isTauri()) return false;
   try {
     await invoke('spawn_headless_agent', { agentId, task });
+    return true;
   } catch (e) {
     console.error('Failed to spawn agent:', e);
+    return false;
   }
 }
 
-export async function killAgent(agentId: string): Promise<void> {
+export async function killAgent(agentId: string): Promise<boolean> {
+  if (typeof window === 'undefined' || !isTauri()) return false;
   try {
     await invoke('kill_headless_agent', { agentId });
+    return true;
   } catch (e) {
     console.error('Failed to kill agent:', e);
+    return false;
   }
 }
+
 

@@ -205,8 +205,8 @@ export default function OverlayPage() {
         if (isAgentCancelledRef.current) break
 
         if (!action || action.actionType === 'none') {
-          if (sarvamKey && currentStep === 1) {
-            playTTS("I'm not sure how to complete that action.", sarvamKey).catch(console.error)
+          if (currentStep === 1) {
+            playTTS("I'm not sure how to complete that action.", sarvamKey || '').catch(console.error)
           }
           setAgentMessage("Could not determine safe action.")
           break
@@ -215,15 +215,13 @@ export default function OverlayPage() {
         setAgentPhase('acting')
         setAgentMessage(`Step ${currentStep}: ${action.description}`)
 
-        if (sarvamKey) {
-          playTTS(`I will ${action.description}`, sarvamKey).catch(console.error)
-        }
+        playTTS(`I will ${action.description}`, sarvamKey || '').catch(console.error)
 
         // Animate Bezier cursor to target coordinate (scale physical pixels to CSS pixels)
         if (action.x != null && action.y != null) {
-          const dpr = typeof window !== 'undefined' ? (window.devicePixelRatio || 1) : 1
-          const targetX = (action.x - rect.x) / dpr
-          const targetY = (action.y - rect.y) / dpr
+          const isMac = typeof navigator !== 'undefined' && navigator.userAgent.includes('Mac')
+          const targetX = isMac ? (action.x - rect.x) : (action.x - rect.x) / (window.devicePixelRatio || 1)
+          const targetY = isMac ? (action.y - rect.y) : (action.y - rect.y) / (window.devicePixelRatio || 1)
           
           let startX = width / 2
           let startY = height - 100
@@ -407,8 +405,8 @@ export default function OverlayPage() {
         // Play TTS for the proactive trigger
         try {
           const sarvamKey = isTauri() ? await invoke<string | null>('get_api_key', { provider: 'sarvam' }).catch(() => null) : null
-          if (sarvamKey && mounted) {
-            playTTS(`Need help in ${event.payload.active_app}?`, sarvamKey).catch(console.error)
+          if (mounted) {
+            playTTS(`Need help in ${event.payload.active_app}?`, sarvamKey || '').catch(console.error)
           }
         } catch (err) {
           console.error("Error playing telemetry TTS:", err)
@@ -609,6 +607,14 @@ export default function OverlayPage() {
     }
   }
 
+  const handlePointerCancel = (e: React.PointerEvent) => {
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId)
+    } catch {}
+    setIsDragging(false)
+    setDoPhase('idle')
+  }
+
   // ── Ask Mode: capture + AI ─────────────────────────────────────────────────
 
   const runAskCapture = async (sel: Selection) => {
@@ -781,7 +787,7 @@ export default function OverlayPage() {
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
-      onPointerCancel={handlePointerUp}
+      onPointerCancel={handlePointerCancel}
     >
       {/* ── Stream Shield HUD ─────────────────────────────────────────── */}
       {isStreamSafe && (

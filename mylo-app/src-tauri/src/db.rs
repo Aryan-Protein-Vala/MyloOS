@@ -21,6 +21,8 @@ pub fn init_db(app: &tauri::AppHandle) -> Result<()> {
     let db_path = get_db_path(app);
     let conn = Connection::open(db_path)?;
 
+    conn.execute_batch("PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000;")?;
+
     conn.execute(
         "CREATE TABLE IF NOT EXISTS chat_history (
             id INTEGER PRIMARY KEY,

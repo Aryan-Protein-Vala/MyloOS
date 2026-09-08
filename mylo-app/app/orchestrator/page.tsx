@@ -32,7 +32,7 @@ export default function Orchestrator() {
     // Check if user is near bottom before auto-scrolling
     const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight <= 60
     if (isNearBottom) {
-      logsEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+      logsEndRef.current?.scrollIntoView({ behavior: 'auto' })
     }
   }, [logs])
 
@@ -110,8 +110,14 @@ export default function Orchestrator() {
   }
 
   const handleKill = async () => {
+    if (!currentAgentId) {
+      if (typeof window !== 'undefined') {
+        alert('No agent is currently selected.')
+      }
+      return
+    }
     setIsRunning(false)
-    const agentId = currentAgentId || '894F-2A'
+    const agentId = currentAgentId
     const now = new Date()
     const timeString = `[${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}]`
     setLogs(prev => [...prev, { time: timeString, msg: `--- KILL SIGNAL DISPATCHED (${agentId}) ---` }].slice(-300))

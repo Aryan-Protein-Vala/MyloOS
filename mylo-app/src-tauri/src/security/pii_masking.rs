@@ -273,6 +273,10 @@ pub fn perform_native_ocr(_img: &DynamicImage) -> Vec<DetectedText> {
     vec![]
 }
 
+pub static PII_REGEX: std::sync::LazyLock<Regex> = std::sync::LazyLock::new(|| {
+    Regex::new(r"(?i)\b(\d{4}[ -]?){3}\d{4}\b|\b\d{3}-\d{2}-\d{4}\b|sk-[A-Za-z0-9_-]{32,}").unwrap()
+});
+
 /// Masks PII in a raw image buffer (e.g., JPEG or PNG) before sending it to cloud models.
 pub fn mask_pii_in_image(b64_image: &str) -> Result<String, String> {
     log::info!("[MYLO Security] Scanning screenshot for PII before transmission...");
@@ -286,12 +290,10 @@ pub fn mask_pii_in_image(b64_image: &str) -> Result<String, String> {
         .map_err(|e| format!("Image decode error: {}", e))?;
         
     let detected_blocks = perform_native_ocr(&img);
-    
-    let pii_regex = Regex::new(r"(?i)\b(\d{4}[ -]?){3}\d{4}\b|\b\d{3}-\d{2}-\d{4}\b|sk-[A-Za-z0-9_-]{32,}").unwrap();
     let mut masked_count = 0;
     
     for block in detected_blocks {
-        if pii_regex.is_match(&block.text) {
+        if PII_REGEX.is_match(&block.text) {
             log::info!("[MYLO Security] Detected PII at ({}, {}). Masking...", block.x, block.y);
             let black = Rgba([0, 0, 0, 255]);
             for y in block.y..(block.y + block.height).min(img.height()) {
@@ -348,10 +350,9 @@ mod tests {
 
     #[test]
     fn test_pii_regex_matches() {
-        let pii_regex = Regex::new(r"(?i)\b(\d{4}[ -]?){3}\d{4}\b|\b\d{3}-\d{2}-\d{4}\b|sk-[A-Za-z0-9_-]{32,}").unwrap();
-        assert!(pii_regex.is_match("Card 4532-1234-5678-9012 valid"));
-        assert!(pii_regex.is_match("SSN: 123-45-6789"));
-        assert!(pii_regex.is_match("sk-proj-1234567890abcdef1234567890abcdef"));
-        assert!(!pii_regex.is_match("Hello world this is a normal test string"));
+        assert!(PII_REGEX.is_match("Card 4532-1234-5678-9012 valid"));
+        assert!(PII_REGEX.is_match("SSN: 123-45-6789"));
+        assert!(PII_REGEX.is_match("sk-proj-1234567890abcdef1234567890abcdef"));
+        assert!(!PII_REGEX.is_match("Hello world this is a normal test string"));
     }
 }

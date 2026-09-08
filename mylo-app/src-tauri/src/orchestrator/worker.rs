@@ -16,11 +16,9 @@ pub async fn run_worker_task(app: AppHandle, task_id: String, task_prompt: Strin
 
     // Verify whether this task was intentionally cancelled / killed
     let was_cancelled = {
-        if let Ok(active) = app.state::<AppState>().active_agents.lock() {
-            !active.contains_key(&task_id)
-        } else {
-            false
-        }
+        let state = app.state::<AppState>();
+        let active = state.active_agents.lock().unwrap_or_else(|p| p.into_inner());
+        !active.contains_key(&task_id)
     };
 
     match res {
@@ -54,11 +52,9 @@ pub async fn run_worker_task(app: AppHandle, task_id: String, task_prompt: Strin
 
 fn run_worker_sync(app: AppHandle, task_id: String, task_prompt: String) -> Result<()> {
     let is_active = || -> bool {
-        if let Ok(active) = app.state::<AppState>().active_agents.lock() {
-            active.contains_key(&task_id)
-        } else {
-            false
-        }
+        let state = app.state::<AppState>();
+        let active = state.active_agents.lock().unwrap_or_else(|p| p.into_inner());
+        active.contains_key(&task_id)
     };
 
     let emit_log = |msg: &str| {

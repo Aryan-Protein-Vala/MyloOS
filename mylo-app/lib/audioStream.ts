@@ -6,9 +6,16 @@ let currentAudioElement: HTMLAudioElement | null = null;
 let currentAudioUrl: string | null = null;
 let currentTtsRequestId = 0;
 let currentTtsAbortController: AbortController | null = null;
+let recordingSessionId = 0;
+let isStartingRecording = false;
 
 export function stopAndRevokeCurrentAudio(): void {
   currentTtsRequestId++;
+  if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+    try {
+      window.speechSynthesis.cancel();
+    } catch {}
+  }
   if (currentTtsAbortController) {
     try {
       currentTtsAbortController.abort();
@@ -29,6 +36,9 @@ export function stopAndRevokeCurrentAudio(): void {
 }
 
 export function cancelRecording(): void {
+  recordingSessionId++;
+  isStartingRecording = false;
+
   if (activeRecorder) {
     try {
       activeRecorder.ondataavailable = null;
@@ -82,9 +92,14 @@ export async function startRecording(): Promise<boolean> {
 
     // Release any previous lingering tracks
     if (activeStream) {
-      activeStream.getTracks().forEach((track) => track.stop());
+      try {
+        activeStream.getTracks().forEach((track) => track.stop());
+      } catch {}
       activeStream = null;
     }
+
+    const currentSessionId = ++recordingSessionId;
+    isStartingRecording = true;
 
     const stream = await navigator.mediaDevices.getUserMedia({
       audio: {
@@ -93,6 +108,18 @@ export async function startRecording(): Promise<boolean> {
         autoGainControl: true,
       },
     });
+
+    // Guard against rapid press-and-release races while getUserMedia was in-flight
+    if (currentSessionId !== recordingSessionId || !isStartingRecording) {
+      console.warn("Recording was cancelled or stopped while getUserMedia was in-flight. Immediately stopping stream tracks.");
+      try {
+        stream.getTracks().forEach((track) => track.stop());
+      } catch (e) {
+        console.warn("Error stopping tracks on aborted recording start:", e);
+      }
+      return false;
+    }
+
     activeStream = stream;
 
     const mimeType = getOptimalMimeType();
@@ -109,13 +136,17 @@ export async function startRecording(): Promise<boolean> {
     };
 
     activeRecorder = recorder;
+    isStartingRecording = false;
     // Collect timeslices every 200ms to ensure all chunks are flushed reliably
     recorder.start(200);
     return true;
   } catch (err) {
+    isStartingRecording = false;
     console.error("Error accessing microphone or initializing recorder:", err);
     if (activeStream) {
-      activeStream.getTracks().forEach((track) => track.stop());
+      try {
+        activeStream.getTracks().forEach((track) => track.stop());
+      } catch {}
       activeStream = null;
     }
     activeRecorder = null;
@@ -124,24 +155,32 @@ export async function startRecording(): Promise<boolean> {
 }
 
 export async function stopRecordingAndTranscribe(groqApiKey: string): Promise<TranscriptionResult> {
+  recordingSessionId++;
+  const wasStarting = isStartingRecording;
+  isStartingRecording = false;
+
   return new Promise((resolve) => {
     const recorder = activeRecorder;
     const stream = activeStream;
 
     if (!recorder || recorder.state === 'inactive') {
       if (stream) {
-        stream.getTracks().forEach((track) => track.stop());
+        try {
+          stream.getTracks().forEach((track) => track.stop());
+        } catch {}
         activeStream = null;
       }
       activeRecorder = null;
-      resolve({ text: null, error: 'Recorder not active' });
+      resolve({ text: null, error: wasStarting ? 'Audio recording cancelled or too short.' : 'Recorder not active' });
       return;
     }
 
     recorder.onstop = async () => {
       // Release microphone tracks immediately
       if (stream) {
-        stream.getTracks().forEach((track) => track.stop());
+        try {
+          stream.getTracks().forEach((track) => track.stop());
+        } catch {}
       }
       activeStream = null;
       activeRecorder = null;
@@ -197,7 +236,9 @@ export async function stopRecordingAndTranscribe(groqApiKey: string): Promise<Tr
     } catch (e) {
       console.error("Error stopping MediaRecorder:", e);
       if (stream) {
-        stream.getTracks().forEach((track) => track.stop());
+        try {
+          stream.getTracks().forEach((track) => track.stop());
+        } catch {}
       }
       activeStream = null;
       activeRecorder = null;
@@ -206,8 +247,27 @@ export async function stopRecordingAndTranscribe(groqApiKey: string): Promise<Tr
   });
 }
 
-export async function playTTS(text: string, sarvamApiKey: string): Promise<void> {
-  if (!text || !text.trim() || !sarvamApiKey || !sarvamApiKey.trim()) {
+function playWebSpeechFallback(text: string, requestId: number): void {
+  if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+    return;
+  }
+  if (requestId !== currentTtsRequestId) {
+    return;
+  }
+  try {
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'en-US';
+    utterance.rate = 1.0;
+    utterance.pitch = 1.0;
+    window.speechSynthesis.speak(utterance);
+  } catch (e) {
+    console.warn("SpeechSynthesis fallback failed:", e);
+  }
+}
+
+export async function playTTS(text: string, sarvamApiKey?: string): Promise<void> {
+  if (!text || !text.trim()) {
     return;
   }
 
@@ -215,6 +275,13 @@ export async function playTTS(text: string, sarvamApiKey: string): Promise<void>
   stopAndRevokeCurrentAudio();
 
   const requestId = currentTtsRequestId;
+
+  // Fall back to Web Speech API if Sarvam key is missing
+  if (!sarvamApiKey || !sarvamApiKey.trim()) {
+    playWebSpeechFallback(text.trim(), requestId);
+    return;
+  }
+
   const abortController = new AbortController();
   currentTtsAbortController = abortController;
 
@@ -230,7 +297,7 @@ export async function playTTS(text: string, sarvamApiKey: string): Promise<void>
         inputs: [text.trim()],
         target_language_code: 'en-IN',
         speaker: 'meera',
-        model: 'bulbul:v3',
+        model: 'bulbul:v1',
         pace: 1.0,
         speech_sample_rate: 24000,
         enable_preprocessing: true,
@@ -290,15 +357,23 @@ export async function playTTS(text: string, sarvamApiKey: string): Promise<void>
       }
 
       await audio.play().catch((playErr) => {
-        console.warn("Audio playback blocked by autoplay policy:", playErr);
+        console.warn("Audio playback blocked by autoplay policy, falling back to Web Speech:", playErr);
         cleanup();
+        if (requestId === currentTtsRequestId) {
+          playWebSpeechFallback(text.trim(), requestId);
+        }
       });
+    } else {
+      playWebSpeechFallback(text.trim(), requestId);
     }
   } catch (err) {
     if (err instanceof Error && err.name === 'AbortError') {
       return;
     }
-    console.error("Error generating or playing TTS:", err);
+    console.error("Error generating or playing TTS via Sarvam, falling back to Web Speech API:", err);
+    if (requestId === currentTtsRequestId) {
+      playWebSpeechFallback(text.trim(), requestId);
+    }
   } finally {
     if (currentTtsAbortController === abortController) {
       currentTtsAbortController = null;

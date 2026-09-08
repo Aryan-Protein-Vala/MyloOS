@@ -699,7 +699,7 @@ pub async fn ask_ai(app_handle: tauri::AppHandle, prompt: String, base64_image: 
     let openai_key = crate::storage::get_key(&app_handle, "openai");
 
     if gemini_key.is_none() && openai_key.is_none() {
-        return Ok("Error: Please set your Gemini or OpenAI API key in MYLO settings.".into());
+        return Err("Please configure your Gemini or OpenAI API key in MYLO settings.".into());
     }
 
     let system_prompt = crate::prompts::ASK_MODE_SYSTEM_PROMPT;
@@ -724,8 +724,12 @@ pub async fn ask_ai(app_handle: tauri::AppHandle, prompt: String, base64_image: 
 
             match res {
                 Ok(text) => {
-                    let _ = crate::db::insert_message(&app_handle, "user", &user_prompt);
-                    let _ = crate::db::insert_message(&app_handle, "assistant", &text);
+                    if let Err(e) = crate::db::insert_message(&app_handle, "user", &user_prompt) {
+                        log::error!("Failed to persist chat message: {e}");
+                    }
+                    if let Err(e) = crate::db::insert_message(&app_handle, "assistant", &text) {
+                        log::error!("Failed to persist chat message: {e}");
+                    }
                     return Ok(text);
                 }
                 Err(err) => {
@@ -971,8 +975,11 @@ pub async fn spawn_headless_agent(
 ) -> Result<(), String> {
     let app_clone = app.clone();
     let agent_id_clone = agent_id.clone();
+    let (started_tx, started_rx) = tokio::sync::oneshot::channel::<()>();
 
     let join_handle = tokio::spawn(async move {
+        let _ = started_rx.await;
+
         crate::orchestrator::worker::run_worker_task(app_clone.clone(), agent_id_clone.clone(), task).await;
         
         let state = app_clone.state::<AppState>();
@@ -983,6 +990,8 @@ pub async fn spawn_headless_agent(
     let state = app.state::<AppState>();
     let mut active = state.active_agents.lock().unwrap_or_else(|p| p.into_inner());
     active.insert(agent_id, join_handle.abort_handle());
+    drop(active);
+    let _ = started_tx.send(());
 
     Ok(())
 }
