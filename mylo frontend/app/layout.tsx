@@ -7,8 +7,8 @@ export const metadata: Metadata = {
   description: 'The AI that moves with you. An ambient, screen-aware AI desktop agent that coaches, acts, and answers without breaking your flow.',
   generator: 'v0.app',
   icons: {
-    icon: '/icon.svg',
-    apple: '/icon.svg',
+    icon: '/favicon.svg',
+    apple: '/favicon.svg',
   },
 }
 
