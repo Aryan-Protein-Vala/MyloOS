@@ -142,9 +142,6 @@ fn activate(app: &AppHandle, mode: OverlayMode) {
         if let Err(e) = crate::ipc::position_overlay_on_active_monitor(app) {
             log::warn!("[MYLO hotkeys] Could not place the overlay: {e}");
         }
-        // Change focus logic: take focus and make interactive so the DOM Double-Esc listener fires
-        let _ = overlay.set_ignore_cursor_events(false);
-        let _ = overlay.set_focus();
         let _ = overlay.show();
     } else {
         state.disarm();
