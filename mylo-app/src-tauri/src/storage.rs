@@ -1,7 +1,7 @@
 use tauri::AppHandle;
 use keyring::Entry;
 
-pub const SUPPORTED_PROVIDERS: [&str; 4] = ["gemini", "openai", "groq", "sarvam"];
+pub const SUPPORTED_PROVIDERS: [&str; 5] = ["gemini", "openai", "groq", "sarvam", "anthropic"];
 
 fn normalize_provider(provider: &str) -> String {
     provider.trim().to_lowercase()
@@ -62,6 +62,23 @@ pub fn delete_key(_app: &AppHandle, provider: &str) -> Result<(), String> {
     Ok(())
 }
 
+pub fn save_license_key(_app: &AppHandle, key: &str) -> Result<(), String> {
+    let entry = Entry::new("mylo_app_config", "license_key").map_err(|e| e.to_string())?;
+    entry.set_password(key.trim()).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+pub fn get_license_key(_app: &AppHandle) -> Option<String> {
+    if let Ok(entry) = Entry::new("mylo_app_config", "license_key") {
+        if let Ok(pwd) = entry.get_password() {
+            if !pwd.trim().is_empty() {
+                return Some(pwd.trim().to_string());
+            }
+        }
+    }
+    None
+}
+
 pub fn stored_providers(_app: &AppHandle) -> Vec<String> {
     let mut providers = Vec::new();
     for p in SUPPORTED_PROVIDERS {
@@ -82,7 +99,8 @@ mod tests {
         assert!(SUPPORTED_PROVIDERS.contains(&"openai"));
         assert!(SUPPORTED_PROVIDERS.contains(&"groq"));
         assert!(SUPPORTED_PROVIDERS.contains(&"sarvam"));
-        assert_eq!(SUPPORTED_PROVIDERS.len(), 4);
+        assert!(SUPPORTED_PROVIDERS.contains(&"anthropic"));
+        assert_eq!(SUPPORTED_PROVIDERS.len(), 5);
     }
 
     #[test]

@@ -692,20 +692,117 @@ async fn call_openai_ask(
     Ok("No response generated.".into())
 }
 
+
+async fn call_managed_ask(
+    client: &reqwest::Client,
+    license_key: &str,
+    system_prompt: &str,
+    user_prompt: &str,
+    base64_image: &str,
+) -> Result<String, String> {
+    let url = "http://127.0.0.1:8787";
+    let body = serde_json::json!({
+        "license_key": license_key,
+        "model_type": "ask",
+        "system_prompt": system_prompt,
+        "user_prompt": user_prompt,
+        "base64_image": base64_image
+    });
+
+    let resp = client.post(url)
+        .header("Content-Type", "application/json")
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if !resp.status().is_success() {
+        return Err(format!("Proxy error {}", resp.status()));
+    }
+
+    let json: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
+    if let Some(err) = json["error"].as_str() {
+        return Err(err.to_string());
+    }
+
+    if let Some(text) = json["text"].as_str() {
+        return Ok(text.to_string());
+    }
+    
+    Err("Invalid response format from proxy".into())
+}
+
+async fn call_managed_do(
+    client: &reqwest::Client,
+    license_key: &str,
+    system_prompt: &str,
+    user_intent: &str,
+    base64_image: &str,
+) -> Result<Option<crate::input_injector::DoAction>, String> {
+    let url = "http://127.0.0.1:8787";
+    let body = serde_json::json!({
+        "license_key": license_key,
+        "model_type": "do",
+        "system_prompt": system_prompt,
+        "user_prompt": format!("User intent: {}", user_intent),
+        "base64_image": base64_image
+    });
+
+    let resp = client.post(url)
+        .header("Content-Type", "application/json")
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if !resp.status().is_success() {
+        return Err(format!("Proxy error {}", resp.status()));
+    }
+
+    let json: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
+    if let Some(err) = json["error"].as_str() {
+        return Err(err.to_string());
+    }
+
+    if let Some(text) = json["text"].as_str() {
+        if let Ok(action) = serde_json::from_str::<crate::input_injector::DoAction>(text) {
+            if action.action_type == "none" { return Ok(None); }
+            return Ok(Some(action));
+        }
+        return Err("Could not parse DoAction".into());
+    }
+    
+    Err("Invalid response format from proxy".into())
+}
+
 #[command]
 pub async fn ask_ai(app_handle: tauri::AppHandle, prompt: String, base64_image: String) -> Result<String, String> {
+    let system_prompt = crate::prompts::ASK_MODE_SYSTEM_PROMPT;
+    let user_prompt = format!("User question: {}", if prompt.is_empty() { "What is this?" } else { &prompt });
+    let client = reqwest::Client::new();
+
+    // 1. Try managed proxy (Pro/Elite)
+    if let Ok(()) = crate::security::tier_gate::enforce_tier(&app_handle, crate::security::tier_gate::Tier::Pro) {
+        if let Some(license_key) = crate::storage::get_license_key(&app_handle) {
+            match call_managed_ask(&client, &license_key, system_prompt, &user_prompt, &base64_image).await {
+                Ok(text) => {
+                    let _ = crate::db::insert_message(&app_handle, "user", &user_prompt);
+                    let _ = crate::db::insert_message(&app_handle, "assistant", &text);
+                    return Ok(text);
+                }
+                Err(e) => log::error!("Managed ask failed, falling back to BYOK: {e}")
+            }
+        }
+    }
+
+    // 2. Fallback to BYOK
     let active_provider = crate::storage::get_active_provider(&app_handle);
     let gemini_key = crate::storage::get_key(&app_handle, "gemini");
     let openai_key = crate::storage::get_key(&app_handle, "openai");
 
     if gemini_key.is_none() && openai_key.is_none() {
-        return Err("Please configure your Gemini or OpenAI API key in MYLO settings.".into());
+        return Err("Please configure your BYOK API key in settings or upgrade to Pro/Elite.".into());
     }
-
-    let system_prompt = crate::prompts::ASK_MODE_SYSTEM_PROMPT;
-    let user_prompt = format!("User question: {}", if prompt.is_empty() { "What is this?" } else { &prompt });
-
-    let client = reqwest::Client::new();
 
     let order: [(&str, Option<String>); 2] = if active_provider == "openai" {
         [("openai", openai_key), ("gemini", gemini_key)]
@@ -840,47 +937,43 @@ pub async fn analyze_for_do_mode(
     user_intent: String,
     rect: crate::ipc::GlobalRect,
 ) -> Result<Option<crate::input_injector::DoAction>, String> {
-    let active_provider = crate::storage::get_active_provider(&app_handle);
-    let gemini_key = crate::storage::get_key(&app_handle, "gemini");
-    let openai_key = crate::storage::get_key(&app_handle, "openai");
+    let system_prompt = crate::prompts::DO_MODE_SYSTEM_PROMPT;
+    let client = reqwest::Client::new();
+    let mut raw_action = None;
 
-    if gemini_key.is_none() && openai_key.is_none() {
-        return Ok(None);
+    // 1. Try managed proxy (Pro/Elite)
+    if let Ok(()) = crate::security::tier_gate::enforce_tier(&app_handle, crate::security::tier_gate::Tier::Pro) {
+        if let Some(license_key) = crate::storage::get_license_key(&app_handle) {
+            match call_managed_do(&client, &license_key, system_prompt, &user_intent, &base64_image).await {
+                Ok(action) => {
+                    raw_action = action;
+                }
+                Err(e) => log::error!("Managed do failed, falling back to BYOK: {e}")
+            }
+        }
     }
 
-    // The key names below are NOT cosmetic: they are the exact field names
-    // `DoAction` deserialises, and `DoAction` is `#[serde(rename_all =
-    // "camelCase")]`. `actionType` and `description` are non-Option fields, so
-    // a snake_case reply makes `serde_json::from_str` fail outright and Do Mode
-    // silently reports "couldn't determine a safe action" for every request.
-    // If you rename a field on `DoAction`, rename it here too — the round-trip
-    // test at the bottom of input_injector.rs exists to catch the drift.
-    //
-    // Coordinates are requested as ratios in [0,1] relative to the cropped
-    // image, never as pixels: the model only ever sees the crop, so it cannot
-    // know the crop's offset on the desktop or how far it was downscaled before
-    // being sent. The caller converts the ratios back to global physical pixels
-    // using the rect that `capture_screen_crop` actually captured.
-    let system_prompt = crate::prompts::DO_MODE_SYSTEM_PROMPT;
-
-    let client = reqwest::Client::new();
-
-    let order: [(&str, Option<String>); 2] = if active_provider == "openai" {
-        [("openai", openai_key), ("gemini", gemini_key)]
-    } else {
-        [("gemini", gemini_key), ("openai", openai_key)]
-    };
-
+    // 2. Fallback to BYOK if managed failed or unauthorized
     let mut last_error = String::new();
-    let mut raw_action = None;
-    
-    for (p, maybe_key) in order {
-        if let Some(key) = maybe_key {
-            let res = if p == "gemini" {
-                call_gemini_do(&client, &key, system_prompt, &user_intent, &base64_image).await
+    if raw_action.is_none() {
+        let active_provider = crate::storage::get_active_provider(&app_handle);
+        let gemini_key = crate::storage::get_key(&app_handle, "gemini");
+        let openai_key = crate::storage::get_key(&app_handle, "openai");
+
+        if gemini_key.is_some() || openai_key.is_some() {
+            let order: [(&str, Option<String>); 2] = if active_provider == "openai" {
+                [("openai", openai_key), ("gemini", gemini_key)]
             } else {
-                call_openai_do(&client, &key, system_prompt, &user_intent, &base64_image).await
+                [("gemini", gemini_key), ("openai", openai_key)]
             };
+
+            for (p, maybe_key) in order {
+                if let Some(key) = maybe_key {
+                    let res = if p == "gemini" {
+                        call_gemini_do(&client, &key, system_prompt, &user_intent, &base64_image).await
+                    } else {
+                        call_openai_do(&client, &key, system_prompt, &user_intent, &base64_image).await
+                    };
 
             match res {
                 Ok(action) => {
@@ -892,8 +985,10 @@ pub async fn analyze_for_do_mode(
                     last_error = err;
                 }
             }
+            }
         }
     }
+}
 
     if let Some(mut action) = raw_action {
         // "none" is the model declining, not an action. Report it as "no action

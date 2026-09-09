@@ -5,6 +5,8 @@ use tauri::{AppHandle, Emitter, Manager};
 use serde_json::json;
 use crate::state::AppState;
 
+const MAX_AGENT_ITERATIONS: usize = 5;
+
 pub async fn run_worker_task(app: AppHandle, task_id: String, task_prompt: String) {
     let app_clone = app.clone();
     let task_id_clone = task_id.clone();
@@ -115,6 +117,17 @@ fn run_worker_sync(app: AppHandle, task_id: String, task_prompt: String) -> Resu
 
     if !is_active() {
         return Ok(());
+    }
+
+    let mut iterations = 0;
+    while is_active() && iterations < MAX_AGENT_ITERATIONS {
+        emit_log(&format!("Running iteration {}/{}", iterations + 1, MAX_AGENT_ITERATIONS));
+        std::thread::sleep(Duration::from_millis(500));
+        iterations += 1;
+    }
+
+    if iterations >= MAX_AGENT_ITERATIONS {
+        emit_log("Safeguard hit: MAX_AGENT_ITERATIONS reached. Halting agent to prevent runaway API costs.");
     }
 
     emit_log("Background task completed successfully.");
