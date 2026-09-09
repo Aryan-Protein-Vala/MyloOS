@@ -146,3 +146,4 @@ pub fn run() {
             }
         });
 }
+pub mod test_autoplay;

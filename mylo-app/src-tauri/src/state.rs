@@ -55,30 +55,36 @@ pub struct ActionGuard {
     /// Set only while a Do Mode action has been explicitly approved by the
     /// user and is awaiting execution. Cleared immediately after execution and
     /// by the panic hotkey.
-    armed: bool,
+    armed: Option<String>,
     recent: Vec<Instant>,
 }
 
 impl ActionGuard {
     /// Allow exactly one subsequent `execute_do_action` call.
-    pub fn arm(&mut self) {
-        self.armed = true;
+    pub fn arm(&mut self, action: String) {
+        self.armed = Some(action);
     }
 
     /// Revoke a pending approval — used by the panic hotkey and on overlay hide.
     pub fn disarm(&mut self) {
-        self.armed = false;
+        self.armed = None;
     }
 
     /// Consume the arm token and check the rate limit.
-    pub fn try_consume(&mut self) -> Result<(), String> {
-        if !self.armed {
+    pub fn try_consume(&mut self, action: &str) -> Result<(), String> {
+        let expected = self.armed.take();
+        if expected.is_none() {
             return Err(
                 "No approved action is pending. Actions must be approved in the overlay first."
                     .to_string(),
             );
         }
-        self.armed = false;
+        if expected.as_deref() != Some(action) {
+            return Err(
+                "The action to execute does not match the approved action."
+                    .to_string(),
+            );
+        }
 
         let now = Instant::now();
         self.recent.retain(|t| now.checked_duration_since(*t).is_some_and(|d| d < RATE_WINDOW));
@@ -112,9 +118,9 @@ impl AppState {
         *guard = mode;
     }
 
-    pub fn arm(&self) {
+    pub fn arm(&self, action: String) {
         let mut guard = self.actions.lock().unwrap_or_else(|p| p.into_inner());
-        guard.arm();
+        guard.arm(action);
     }
 
     pub fn disarm(&self) {
@@ -122,9 +128,9 @@ impl AppState {
         guard.disarm();
     }
 
-    pub fn try_consume(&self) -> Result<(), String> {
+    pub fn try_consume(&self, action: &str) -> Result<(), String> {
         let mut guard = self.actions.lock().unwrap_or_else(|p| p.into_inner());
-        guard.try_consume()
+        guard.try_consume(action)
     }
 }
 
@@ -135,30 +141,30 @@ mod tests {
     #[test]
     fn execution_requires_an_arm() {
         let mut guard = ActionGuard::default();
-        assert!(guard.try_consume().is_err());
-        guard.arm();
-        assert!(guard.try_consume().is_ok());
+        assert!(guard.try_consume("action").is_err());
+        guard.arm("action".to_string());
+        assert!(guard.try_consume("action").is_ok());
         // The arm is single-use.
-        assert!(guard.try_consume().is_err());
+        assert!(guard.try_consume("action").is_err());
     }
 
     #[test]
     fn disarm_revokes_a_pending_approval() {
         let mut guard = ActionGuard::default();
-        guard.arm();
+        guard.arm("action".to_string());
         guard.disarm();
-        assert!(guard.try_consume().is_err());
+        assert!(guard.try_consume("action").is_err());
     }
 
     #[test]
     fn rate_limit_trips_after_the_cap() {
         let mut guard = ActionGuard::default();
         for _ in 0..RATE_LIMIT {
-            guard.arm();
-            assert!(guard.try_consume().is_ok());
+            guard.arm("action".to_string());
+            assert!(guard.try_consume("action").is_ok());
         }
-        guard.arm();
-        assert!(guard.try_consume().is_err());
+        guard.arm("action".to_string());
+        assert!(guard.try_consume("action").is_err());
     }
 
     #[test]
@@ -173,8 +179,8 @@ mod tests {
         let mut guard = ActionGuard::default();
         // Insert a timestamp in the future to simulate clock rollback
         guard.recent.push(Instant::now() + Duration::from_secs(60));
-        guard.arm();
-        assert!(guard.try_consume().is_ok());
+        guard.arm("action".to_string());
+        assert!(guard.try_consume("action").is_ok());
     }
 
     #[test]
@@ -216,9 +222,9 @@ mod tests {
         assert!(state.actions.is_poisoned());
 
         // arm() and try_consume() must safely recover without panicking
-        state.arm();
-        assert!(state.try_consume().is_ok());
+        state.arm("action".to_string());
+        assert!(state.try_consume("action").is_ok());
         // Consumed once, subsequent attempt is single-use error
-        assert!(state.try_consume().is_err());
+        assert!(state.try_consume("action").is_err());
     }
 }

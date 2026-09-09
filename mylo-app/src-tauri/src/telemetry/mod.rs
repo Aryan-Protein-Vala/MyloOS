@@ -1,5 +1,9 @@
-use tauri::{AppHandle, Emitter};
+use tauri::AppHandle;
+#[cfg(target_os = "macos")]
+use tauri::Emitter;
+#[cfg(target_os = "macos")]
 use std::time::Duration;
+#[cfg(target_os = "macos")]
 use tokio::time::sleep;
 
 pub mod event_hooks_macos;

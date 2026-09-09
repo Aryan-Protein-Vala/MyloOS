@@ -19,7 +19,7 @@
         "width": 1000,
         "height": 800,
         "resizable": true,
-        "fullscreen": false
+        "fullscreen": false, "additionalBrowserArgs": "--autoplay-policy=no-user-gesture-required"
       },
       {
         "title": "MYLO Overlay",
@@ -31,7 +31,7 @@
         "fullscreen": true,
         "resizable": false,
         "skipTaskbar": true,
-        "visible": false
+        "visible": false, "additionalBrowserArgs": "--autoplay-policy=no-user-gesture-required"
       }
     ],
     "security": {
@@ -46,7 +46,8 @@
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.icns",
-      "icons/icon.ico"
+      "icons/icon.ico",
+      "icons/icon.png"
     ],
     "macOS": {
       "frameworks": ["CoreGraphics", "CoreVideo", "AppKit"],

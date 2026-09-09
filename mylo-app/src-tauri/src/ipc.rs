@@ -466,7 +466,8 @@ pub fn approve_do_action(app_handle: AppHandle, action: DoAction) -> Result<(), 
     crate::input_injector::validate(&action, bounds)?;
 
     let state = app_handle.state::<AppState>();
-    state.arm();
+    let action_str = serde_json::to_string(&action).map_err(|e| format!("Failed to serialize action: {e}"))?;
+    state.arm(action_str);
 
     log::info!("[MYLO do] Armed action: {} — {}", action.action_type, action.description);
     Ok(())
@@ -482,7 +483,8 @@ pub fn execute_do_action(app_handle: AppHandle, action: DoAction) -> Result<(), 
 
     {
         let state = app_handle.state::<AppState>();
-        state.try_consume()?;
+        let action_str = serde_json::to_string(&action).map_err(|e| format!("Failed to serialize action: {e}"))?;
+        state.try_consume(&action_str)?;
     }
 
     // Refuse to fire while the overlay is still on screen — the click would
@@ -550,8 +552,9 @@ pub fn execute_agentic_action(app_handle: AppHandle, action: DoAction) -> Result
 
     // Programmatically arm and consume the rate-limiter guard
     {
-        state.arm();
-        state.try_consume()?;
+        let action_str = serde_json::to_string(&action).map_err(|e| format!("Failed to serialize action: {e}"))?;
+        state.arm(action_str.clone());
+        state.try_consume(&action_str)?;
     }
 
     // Ensure overlay is set to click-through so the input hits the desktop app beneath

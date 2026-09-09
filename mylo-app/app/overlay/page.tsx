@@ -768,7 +768,9 @@ export default function OverlayPage() {
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
-  if (mode === 'hidden' && agentPhase === 'idle' && !proactiveMessage) return null
+  if (mode === 'hidden' && agentPhase === 'idle' && !proactiveMessage) {
+    return <div id="mylo-overlay-root" className="pointer-events-none hidden" />
+  }
 
   const isDoDrawing = mode === 'do' && (doPhase === 'idle' || doPhase === 'drawing')
   const needsPointerEvents =
