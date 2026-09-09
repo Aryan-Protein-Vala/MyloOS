@@ -122,12 +122,6 @@ pub fn bindings() -> Vec<Binding> {
 static PTT_ACTIVE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 /// Show the overlay in `mode`, or hide it if that mode is already showing.
-///
-/// Deliberately does **not** call `set_focus()`. Stealing focus from whatever
-/// the user is working in changes that app's state and is exactly the wrong
-/// behaviour for an ambient overlay. Focus is taken later, only when the user
-/// interacts with a control that needs the keyboard (see
-/// `ipc::set_overlay_interactive`).
 fn activate(app: &AppHandle, mode: OverlayMode) {
     let Some(overlay) = app.get_webview_window("overlay") else {
         log::error!("[MYLO hotkeys] Overlay window is missing");
@@ -148,6 +142,9 @@ fn activate(app: &AppHandle, mode: OverlayMode) {
         if let Err(e) = crate::ipc::position_overlay_on_active_monitor(app) {
             log::warn!("[MYLO hotkeys] Could not place the overlay: {e}");
         }
+        // Change focus logic: take focus and make interactive so the DOM Double-Esc listener fires
+        let _ = overlay.set_ignore_cursor_events(false);
+        let _ = overlay.set_focus();
         let _ = overlay.show();
     } else {
         state.disarm();
