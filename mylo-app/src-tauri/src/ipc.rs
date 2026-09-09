@@ -13,7 +13,7 @@
 //!    `approve_do_action` armed it first, and re-validates the action against
 //!    the real desktop bounds even then.
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use tauri::{command, AppHandle, Manager, WebviewWindow};
 
 use crate::input_injector::{DesktopBounds, DoAction};
@@ -164,21 +164,37 @@ pub fn request_screen_recording_permissions() -> bool {
 }
 
 #[tauri::command]
-pub fn toggle_overlay(app_handle: AppHandle, visible: bool, click_through: bool) -> Result<(), String> {
+pub fn toggle_overlay(
+    app_handle: AppHandle,
+    visible: bool,
+    click_through: bool,
+) -> Result<(), String> {
     let window = overlay(&app_handle)?;
     let state = app_handle.state::<AppState>();
 
     if visible {
         let _ = position_overlay_on_active_monitor(&app_handle);
+        
+        // Dynamically steal Escape while the overlay is visible so the user can easily dismiss it
+        use tauri_plugin_global_shortcut::{Code, Shortcut, GlobalShortcutExt};
+        let _ = app_handle.global_shortcut().register(Shortcut::new(None, Code::Escape));
+        
         window.show().map_err(|e| e.to_string())?;
     } else {
         state.set_mode(OverlayMode::Hidden);
         state.disarm();
-        *state.last_synthetic_pos.lock().unwrap_or_else(|p| p.into_inner()) = None;
+        *state
+            .last_synthetic_pos
+            .lock()
+            .unwrap_or_else(|p| p.into_inner()) = None;
         // Always restore click-through before hiding, so a later show() can
         // never come back up swallowing every click on the desktop.
         let _ = window.set_ignore_cursor_events(true);
         window.hide().map_err(|e| e.to_string())?;
+        
+        // Return Escape to the OS
+        use tauri_plugin_global_shortcut::{Code, Shortcut, GlobalShortcutExt};
+        let _ = app_handle.global_shortcut().unregister(Shortcut::new(None, Code::Escape));
     }
 
     let _ = window.set_ignore_cursor_events(click_through);
@@ -310,6 +326,16 @@ pub fn get_active_provider(app_handle: AppHandle) -> String {
     crate::storage::get_active_provider(&app_handle)
 }
 
+#[command]
+pub fn save_license_key(app_handle: AppHandle, key: String) -> Result<(), String> {
+    crate::storage::save_license_key(&app_handle, &key)
+}
+
+#[command]
+pub fn get_license_key(app_handle: AppHandle) -> Result<Option<String>, String> {
+    Ok(crate::storage::get_license_key(&app_handle))
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Screen capture
 // ─────────────────────────────────────────────────────────────────────────────
@@ -395,8 +421,7 @@ pub async fn capture_screen_crop(
     #[cfg(not(target_os = "macos"))]
     let (cap_x, cap_y, cap_w, cap_h) = (rect.x, rect.y, rect.width, rect.height);
 
-    let mut image =
-        crate::screen_capture::capture_crop_async(cap_x, cap_y, cap_w, cap_h).await?;
+    let mut image = crate::screen_capture::capture_crop_async(cap_x, cap_y, cap_w, cap_h).await?;
 
     if let Some(img) = image {
         image = Some(crate::security::pii_masking::mask_pii_in_image(&img)?);
@@ -466,10 +491,15 @@ pub fn approve_do_action(app_handle: AppHandle, action: DoAction) -> Result<(), 
     crate::input_injector::validate(&action, bounds)?;
 
     let state = app_handle.state::<AppState>();
-    let action_str = serde_json::to_string(&action).map_err(|e| format!("Failed to serialize action: {e}"))?;
+    let action_str =
+        serde_json::to_string(&action).map_err(|e| format!("Failed to serialize action: {e}"))?;
     state.arm(action_str);
 
-    log::info!("[MYLO do] Armed action: {} — {}", action.action_type, action.description);
+    log::info!(
+        "[MYLO do] Armed action: {} — {}",
+        action.action_type,
+        action.description
+    );
     Ok(())
 }
 
@@ -483,7 +513,8 @@ pub fn execute_do_action(app_handle: AppHandle, action: DoAction) -> Result<(), 
 
     {
         let state = app_handle.state::<AppState>();
-        let action_str = serde_json::to_string(&action).map_err(|e| format!("Failed to serialize action: {e}"))?;
+        let action_str = serde_json::to_string(&action)
+            .map_err(|e| format!("Failed to serialize action: {e}"))?;
         state.try_consume(&action_str)?;
     }
 
@@ -500,7 +531,11 @@ pub fn execute_do_action(app_handle: AppHandle, action: DoAction) -> Result<(), 
     let result = crate::input_injector::execute_action(&action, bounds);
 
     match &result {
-        Ok(()) => log::info!("[MYLO do] Executed: {} — {}", action.action_type, action.description),
+        Ok(()) => log::info!(
+            "[MYLO do] Executed: {} — {}",
+            action.action_type,
+            action.description
+        ),
         Err(e) => log::error!("[MYLO do] Failed: {} — {e}", action.action_type),
     }
 
@@ -512,14 +547,20 @@ pub fn execute_do_action(app_handle: AppHandle, action: DoAction) -> Result<(), 
 pub fn cancel_do_action(app_handle: AppHandle) {
     let state = app_handle.state::<AppState>();
     state.disarm();
-    *state.last_synthetic_pos.lock().unwrap_or_else(|p| p.into_inner()) = None;
+    *state
+        .last_synthetic_pos
+        .lock()
+        .unwrap_or_else(|p| p.into_inner()) = None;
 }
 
 /// Dismiss the overlay and reset state.
 #[command]
 pub fn dismiss(app_handle: AppHandle) -> Result<(), String> {
     let state = app_handle.state::<AppState>();
-    *state.last_synthetic_pos.lock().unwrap_or_else(|p| p.into_inner()) = None;
+    *state
+        .last_synthetic_pos
+        .lock()
+        .unwrap_or_else(|p| p.into_inner()) = None;
     toggle_overlay(app_handle, false, true)
 }
 
@@ -537,14 +578,22 @@ pub fn execute_agentic_action(app_handle: AppHandle, action: DoAction) -> Result
     crate::input_injector::validate(&action, bounds)?;
 
     // Hardware Mouse Fight Detection for single agentic actions
-    let prev_pos = *state.last_synthetic_pos.lock().unwrap_or_else(|p| p.into_inner());
+    let prev_pos = *state
+        .last_synthetic_pos
+        .lock()
+        .unwrap_or_else(|p| p.into_inner());
     if let Some((ex, ey)) = prev_pos {
         use enigo::{Enigo, Mouse};
         if let Ok(enigo) = Enigo::new(&enigo::Settings::default()) {
             if let Ok((actual_x, actual_y)) = enigo.location() {
                 if (actual_x - ex).abs() > 15 || (actual_y - ey).abs() > 15 {
-                    *state.last_synthetic_pos.lock().unwrap_or_else(|p| p.into_inner()) = None;
-                    return Err("Agent aborted: detected manual mouse movement. User took control.".into());
+                    *state
+                        .last_synthetic_pos
+                        .lock()
+                        .unwrap_or_else(|p| p.into_inner()) = None;
+                    return Err(
+                        "Agent aborted: detected manual mouse movement. User took control.".into(),
+                    );
                 }
             }
         }
@@ -552,7 +601,8 @@ pub fn execute_agentic_action(app_handle: AppHandle, action: DoAction) -> Result
 
     // Programmatically arm and consume the rate-limiter guard
     {
-        let action_str = serde_json::to_string(&action).map_err(|e| format!("Failed to serialize action: {e}"))?;
+        let action_str = serde_json::to_string(&action)
+            .map_err(|e| format!("Failed to serialize action: {e}"))?;
         state.arm(action_str.clone());
         state.try_consume(&action_str)?;
     }
@@ -564,20 +614,30 @@ pub fn execute_agentic_action(app_handle: AppHandle, action: DoAction) -> Result
 
     // Verify panic mode / overlay hidden state right before execution
     if state.mode() == OverlayMode::Hidden {
-        return Err("Action aborted: overlay is hidden or panic hotkey was pressed during execution setup".to_string());
+        return Err(
+            "Action aborted: overlay is hidden or panic hotkey was pressed during execution setup"
+                .to_string(),
+        );
     }
-    
+
     let result = crate::input_injector::execute_action(&action, bounds);
 
     match &result {
         Ok(()) => {
-            log::info!("[MYLO agentic] Executed: {} — {}", action.action_type, action.description);
+            log::info!(
+                "[MYLO agentic] Executed: {} — {}",
+                action.action_type,
+                action.description
+            );
             // Query actual hardware cursor location to record the true injected coordinates.
             // This prevents false-positive mouse fight aborts if ui_snapper adjusted the target coordinate.
             use enigo::{Enigo, Mouse};
             if let Ok(enigo) = Enigo::new(&enigo::Settings::default()) {
                 if let Ok(loc) = enigo.location() {
-                    *state.last_synthetic_pos.lock().unwrap_or_else(|p| p.into_inner()) = Some(loc);
+                    *state
+                        .last_synthetic_pos
+                        .lock()
+                        .unwrap_or_else(|p| p.into_inner()) = Some(loc);
                 }
             }
         }
@@ -594,7 +654,9 @@ pub fn execute_agentic_chain(app_handle: AppHandle, actions: Vec<DoAction>) -> R
 
     for action in actions {
         if state.mode() == OverlayMode::Hidden {
-            return Err("Action chain aborted: overlay is hidden or panic hotkey was pressed".to_string());
+            return Err(
+                "Action chain aborted: overlay is hidden or panic hotkey was pressed".to_string(),
+            );
         }
 
         execute_agentic_action(app_handle.clone(), action)?;
@@ -614,12 +676,18 @@ pub struct ActiveAgentPayload {
 #[command]
 pub fn get_active_agents(app_handle: AppHandle) -> Vec<ActiveAgentPayload> {
     let state = app_handle.state::<AppState>();
-    let agents = state.active_agents.lock().unwrap_or_else(|p| p.into_inner());
-    agents.keys().map(|id| ActiveAgentPayload {
-        id: id.clone(),
-        name: "Headless Web Agent".into(),
-        status: "running".into(),
-    }).collect()
+    let agents = state
+        .active_agents
+        .lock()
+        .unwrap_or_else(|p| p.into_inner());
+    agents
+        .keys()
+        .map(|id| ActiveAgentPayload {
+            id: id.clone(),
+            name: "Headless Web Agent".into(),
+            status: "running".into(),
+        })
+        .collect()
 }
 
 async fn call_gemini_ask(
@@ -629,7 +697,8 @@ async fn call_gemini_ask(
     user_prompt: &str,
     base64_image: &str,
 ) -> Result<String, String> {
-    let url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
+    let url =
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
     let body = serde_json::json!({
         "contents": [{
             "parts": [
@@ -639,7 +708,8 @@ async fn call_gemini_ask(
         }]
     });
 
-    let resp = client.post(url)
+    let resp = client
+        .post(url)
         .header("Content-Type", "application/json")
         .header("x-goog-api-key", key)
         .json(&body)
@@ -676,7 +746,8 @@ async fn call_openai_ask(
         }]
     });
 
-    let resp = client.post("https://api.openai.com/v1/chat/completions")
+    let resp = client
+        .post("https://api.openai.com/v1/chat/completions")
         .header("Content-Type", "application/json")
         .header("Authorization", format!("Bearer {}", key))
         .json(&body)
@@ -695,7 +766,6 @@ async fn call_openai_ask(
     Ok("No response generated.".into())
 }
 
-
 async fn call_managed_ask(
     client: &reqwest::Client,
     license_key: &str,
@@ -703,7 +773,8 @@ async fn call_managed_ask(
     user_prompt: &str,
     base64_image: &str,
 ) -> Result<String, String> {
-    let url = "http://127.0.0.1:8787";
+    let url =
+        std::env::var("MYLO_PROXY_URL").unwrap_or_else(|_| "https://proxy.myloos.com".to_string());
     let body = serde_json::json!({
         "license_key": license_key,
         "model_type": "ask",
@@ -712,8 +783,10 @@ async fn call_managed_ask(
         "base64_image": base64_image
     });
 
-    let resp = client.post(url)
+    let resp = client
+        .post(&url)
         .header("Content-Type", "application/json")
+        .timeout(std::time::Duration::from_millis(500))
         .json(&body)
         .send()
         .await
@@ -731,7 +804,7 @@ async fn call_managed_ask(
     if let Some(text) = json["text"].as_str() {
         return Ok(text.to_string());
     }
-    
+
     Err("Invalid response format from proxy".into())
 }
 
@@ -742,7 +815,8 @@ async fn call_managed_do(
     user_intent: &str,
     base64_image: &str,
 ) -> Result<Option<crate::input_injector::DoAction>, String> {
-    let url = "http://127.0.0.1:8787";
+    let url =
+        std::env::var("MYLO_PROXY_URL").unwrap_or_else(|_| "https://proxy.myloos.com".to_string());
     let body = serde_json::json!({
         "license_key": license_key,
         "model_type": "do",
@@ -751,8 +825,10 @@ async fn call_managed_do(
         "base64_image": base64_image
     });
 
-    let resp = client.post(url)
+    let resp = client
+        .post(&url)
         .header("Content-Type", "application/json")
+        .timeout(std::time::Duration::from_millis(500))
         .json(&body)
         .send()
         .await
@@ -769,31 +845,54 @@ async fn call_managed_do(
 
     if let Some(text) = json["text"].as_str() {
         if let Ok(action) = serde_json::from_str::<crate::input_injector::DoAction>(text) {
-            if action.action_type == "none" { return Ok(None); }
+            if action.action_type == "none" {
+                return Ok(None);
+            }
             return Ok(Some(action));
         }
         return Err("Could not parse DoAction".into());
     }
-    
+
     Err("Invalid response format from proxy".into())
 }
 
 #[command]
-pub async fn ask_ai(app_handle: tauri::AppHandle, prompt: String, base64_image: String) -> Result<String, String> {
+pub async fn ask_ai(
+    app_handle: tauri::AppHandle,
+    prompt: String,
+    base64_image: String,
+) -> Result<String, String> {
     let system_prompt = crate::prompts::ASK_MODE_SYSTEM_PROMPT;
-    let user_prompt = format!("User question: {}", if prompt.is_empty() { "What is this?" } else { &prompt });
+    let user_prompt = format!(
+        "User question: {}",
+        if prompt.is_empty() {
+            "What is this?"
+        } else {
+            &prompt
+        }
+    );
     let client = reqwest::Client::new();
 
     // 1. Try managed proxy (Pro/Elite)
-    if let Ok(()) = crate::security::tier_gate::enforce_tier(&app_handle, crate::security::tier_gate::Tier::Pro) {
+    if let Ok(()) =
+        crate::security::tier_gate::enforce_tier(&app_handle, crate::security::tier_gate::Tier::Pro)
+    {
         if let Some(license_key) = crate::storage::get_license_key(&app_handle) {
-            match call_managed_ask(&client, &license_key, system_prompt, &user_prompt, &base64_image).await {
+            match call_managed_ask(
+                &client,
+                &license_key,
+                system_prompt,
+                &user_prompt,
+                &base64_image,
+            )
+            .await
+            {
                 Ok(text) => {
                     let _ = crate::db::insert_message(&app_handle, "user", &user_prompt);
                     let _ = crate::db::insert_message(&app_handle, "assistant", &text);
                     return Ok(text);
                 }
-                Err(e) => log::error!("Managed ask failed, falling back to BYOK: {e}")
+                Err(e) => log::error!("Managed ask failed, falling back to BYOK: {e}"),
             }
         }
     }
@@ -804,7 +903,9 @@ pub async fn ask_ai(app_handle: tauri::AppHandle, prompt: String, base64_image: 
     let openai_key = crate::storage::get_key(&app_handle, "openai");
 
     if gemini_key.is_none() && openai_key.is_none() {
-        return Err("Please configure your BYOK API key in settings or upgrade to Pro/Elite.".into());
+        return Err(
+            "Please configure your BYOK API key in settings or upgrade to Pro/Elite.".into(),
+        );
     }
 
     let order: [(&str, Option<String>); 2] = if active_provider == "openai" {
@@ -848,7 +949,10 @@ pub async fn ask_ai(app_handle: tauri::AppHandle, prompt: String, base64_image: 
 }
 
 #[command]
-pub fn get_chat_history(app_handle: AppHandle, limit: Option<usize>) -> Result<Vec<crate::db::ChatMessage>, String> {
+pub fn get_chat_history(
+    app_handle: AppHandle,
+    limit: Option<usize>,
+) -> Result<Vec<crate::db::ChatMessage>, String> {
     crate::db::get_recent_messages(&app_handle, limit.unwrap_or(50)).map_err(|e| e.to_string())
 }
 
@@ -859,7 +963,8 @@ async fn call_gemini_do(
     user_intent: &str,
     base64_image: &str,
 ) -> Result<Option<crate::input_injector::DoAction>, String> {
-    let url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
+    let url =
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
     let body = serde_json::json!({
         "contents": [{
             "parts": [
@@ -870,7 +975,8 @@ async fn call_gemini_do(
         "generationConfig": { "responseMimeType": "application/json" }
     });
 
-    let resp = client.post(url)
+    let resp = client
+        .post(url)
         .header("Content-Type", "application/json")
         .header("x-goog-api-key", key)
         .json(&body)
@@ -885,7 +991,9 @@ async fn call_gemini_do(
     let json: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
     if let Some(text) = json["candidates"][0]["content"]["parts"][0]["text"].as_str() {
         if let Ok(action) = serde_json::from_str::<crate::input_injector::DoAction>(text) {
-            if action.action_type == "none" { return Ok(None); }
+            if action.action_type == "none" {
+                return Ok(None);
+            }
             return Ok(Some(action));
         }
     }
@@ -911,7 +1019,8 @@ async fn call_openai_do(
         }]
     });
 
-    let resp = client.post("https://api.openai.com/v1/chat/completions")
+    let resp = client
+        .post("https://api.openai.com/v1/chat/completions")
         .header("Content-Type", "application/json")
         .header("Authorization", format!("Bearer {}", key))
         .json(&body)
@@ -926,7 +1035,9 @@ async fn call_openai_do(
     let json: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
     if let Some(text) = json["choices"][0]["message"]["content"].as_str() {
         if let Ok(action) = serde_json::from_str::<crate::input_injector::DoAction>(text) {
-            if action.action_type == "none" { return Ok(None); }
+            if action.action_type == "none" {
+                return Ok(None);
+            }
             return Ok(Some(action));
         }
     }
@@ -945,13 +1056,23 @@ pub async fn analyze_for_do_mode(
     let mut raw_action = None;
 
     // 1. Try managed proxy (Pro/Elite)
-    if let Ok(()) = crate::security::tier_gate::enforce_tier(&app_handle, crate::security::tier_gate::Tier::Pro) {
+    if let Ok(()) =
+        crate::security::tier_gate::enforce_tier(&app_handle, crate::security::tier_gate::Tier::Pro)
+    {
         if let Some(license_key) = crate::storage::get_license_key(&app_handle) {
-            match call_managed_do(&client, &license_key, system_prompt, &user_intent, &base64_image).await {
+            match call_managed_do(
+                &client,
+                &license_key,
+                system_prompt,
+                &user_intent,
+                &base64_image,
+            )
+            .await
+            {
                 Ok(action) => {
                     raw_action = action;
                 }
-                Err(e) => log::error!("Managed do failed, falling back to BYOK: {e}")
+                Err(e) => log::error!("Managed do failed, falling back to BYOK: {e}"),
             }
         }
     }
@@ -973,25 +1094,27 @@ pub async fn analyze_for_do_mode(
             for (p, maybe_key) in order {
                 if let Some(key) = maybe_key {
                     let res = if p == "gemini" {
-                        call_gemini_do(&client, &key, system_prompt, &user_intent, &base64_image).await
+                        call_gemini_do(&client, &key, system_prompt, &user_intent, &base64_image)
+                            .await
                     } else {
-                        call_openai_do(&client, &key, system_prompt, &user_intent, &base64_image).await
+                        call_openai_do(&client, &key, system_prompt, &user_intent, &base64_image)
+                            .await
                     };
 
-            match res {
-                Ok(action) => {
-                    raw_action = action;
-                    break;
+                    match res {
+                        Ok(action) => {
+                            raw_action = action;
+                            break;
+                        }
+                        Err(err) => {
+                            eprintln!("[MYLO AI do] Provider {} failed: {}", p, err);
+                            last_error = err;
+                        }
+                    }
                 }
-                Err(err) => {
-                    eprintln!("[MYLO AI do] Provider {} failed: {}", p, err);
-                    last_error = err;
-                }
-            }
             }
         }
     }
-}
 
     if let Some(mut action) = raw_action {
         // "none" is the model declining, not an action. Report it as "no action
@@ -1036,15 +1159,15 @@ pub struct AgentLogPayload {
 }
 
 #[tauri::command]
-pub fn kill_headless_agent(
-    app_handle: AppHandle,
-    agent_id: String,
-) -> Result<(), String> {
+pub fn kill_headless_agent(app_handle: AppHandle, agent_id: String) -> Result<(), String> {
     use tauri::Emitter;
 
     let state = app_handle.state::<AppState>();
     let abort_handle = {
-        let mut active = state.active_agents.lock().unwrap_or_else(|p| p.into_inner());
+        let mut active = state
+            .active_agents
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
         active.remove(&agent_id)
     };
 
@@ -1052,15 +1175,21 @@ pub fn kill_headless_agent(
         handle.abort();
     }
 
-    let _ = app_handle.emit("agent_status", AgentStatusPayload {
-        agent_id: agent_id.clone(),
-        status: "killed".to_string(),
-    });
+    let _ = app_handle.emit(
+        "agent_status",
+        AgentStatusPayload {
+            agent_id: agent_id.clone(),
+            status: "killed".to_string(),
+        },
+    );
 
-    let _ = app_handle.emit("agent_log", AgentLogPayload {
-        agent_id,
-        message: "[SYSTEM] Agent killed by user.".to_string(),
-    });
+    let _ = app_handle.emit(
+        "agent_log",
+        AgentLogPayload {
+            agent_id,
+            message: "[SYSTEM] Agent killed by user.".to_string(),
+        },
+    );
 
     Ok(())
 }
@@ -1078,15 +1207,26 @@ pub async fn spawn_headless_agent(
     let join_handle = tokio::spawn(async move {
         let _ = started_rx.await;
 
-        crate::orchestrator::worker::run_worker_task(app_clone.clone(), agent_id_clone.clone(), task).await;
-        
+        crate::orchestrator::worker::run_worker_task(
+            app_clone.clone(),
+            agent_id_clone.clone(),
+            task,
+        )
+        .await;
+
         let state = app_clone.state::<AppState>();
-        let mut active = state.active_agents.lock().unwrap_or_else(|p| p.into_inner());
+        let mut active = state
+            .active_agents
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
         active.remove(&agent_id_clone);
     });
 
     let state = app.state::<AppState>();
-    let mut active = state.active_agents.lock().unwrap_or_else(|p| p.into_inner());
+    let mut active = state
+        .active_agents
+        .lock()
+        .unwrap_or_else(|p| p.into_inner());
     active.insert(agent_id, join_handle.abort_handle());
     drop(active);
     let _ = started_tx.send(());

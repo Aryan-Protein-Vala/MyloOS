@@ -11,7 +11,10 @@ pub struct ChatMessage {
 
 pub fn get_db_path(app: &tauri::AppHandle) -> PathBuf {
     use tauri::Manager;
-    let mut path = app.path().app_data_dir().expect("Failed to get app data dir");
+    let mut path = app
+        .path()
+        .app_data_dir()
+        .expect("Failed to get app data dir");
     std::fs::create_dir_all(&path).ok();
     path.push("mylo_chat_history.db");
     path
@@ -40,20 +43,22 @@ pub fn init_db(app: &tauri::AppHandle) -> Result<()> {
 pub fn insert_message(app: &tauri::AppHandle, role: &str, content: &str) -> Result<i64> {
     let db_path = get_db_path(app);
     let conn = Connection::open(db_path)?;
-    
+
     conn.execute(
         "INSERT INTO chat_history (role, content) VALUES (?1, ?2)",
         params![role, content],
     )?;
-    
+
     Ok(conn.last_insert_rowid())
 }
 
 pub fn get_recent_messages(app: &tauri::AppHandle, limit: usize) -> Result<Vec<ChatMessage>> {
     let db_path = get_db_path(app);
     let conn = Connection::open(db_path)?;
-    
-    let mut stmt = conn.prepare("SELECT id, role, content, timestamp FROM chat_history ORDER BY id DESC LIMIT ?1")?;
+
+    let mut stmt = conn.prepare(
+        "SELECT id, role, content, timestamp FROM chat_history ORDER BY id DESC LIMIT ?1",
+    )?;
     let message_iter = stmt.query_map([limit as i64], |row| {
         Ok(ChatMessage {
             id: Some(row.get(0)?),
@@ -62,15 +67,15 @@ pub fn get_recent_messages(app: &tauri::AppHandle, limit: usize) -> Result<Vec<C
             timestamp: row.get(3)?,
         })
     })?;
-    
+
     let mut messages = Vec::new();
     for msg in message_iter {
         messages.push(msg?);
     }
-    
+
     // Reverse so chronological order is maintained
     messages.reverse();
-    
+
     Ok(messages)
 }
 

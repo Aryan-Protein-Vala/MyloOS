@@ -37,13 +37,13 @@ pub mod sys {
             y: f32,
             outElement: *mut AXUIElementRef,
         ) -> i32; // AXError
-        
+
         pub fn AXUIElementCopyAttributeValue(
             element: AXUIElementRef,
             attribute: CFStringRef,
             value: *mut CFTypeRef,
         ) -> i32;
-        
+
         pub fn AXValueGetValue(
             value: CFTypeRef,
             theType: i32,
@@ -58,10 +58,10 @@ pub mod sys {
 
 #[cfg(target_os = "macos")]
 pub fn snap_to_element(x: i32, y: i32) -> Option<(i32, i32)> {
-    use sys::*;
     use core_foundation::base::TCFType;
     use core_foundation::string::CFString;
     use std::ptr;
+    use sys::*;
 
     unsafe {
         let system_wide = AXUIElementCreateSystemWide();
@@ -70,16 +70,11 @@ pub fn snap_to_element(x: i32, y: i32) -> Option<(i32, i32)> {
         }
 
         let mut element: AXUIElementRef = ptr::null();
-        let err = AXUIElementCopyElementAtPosition(
-            system_wide,
-            x as f32,
-            y as f32,
-            &mut element,
-        );
+        let err = AXUIElementCopyElementAtPosition(system_wide, x as f32, y as f32, &mut element);
 
         // CoreFoundation Create rule: caller owns system_wide and must release it
         core_foundation::base::CFRelease(system_wide as _);
-        
+
         if err != K_AX_ERROR_SUCCESS || element.is_null() {
             return None;
         }
@@ -90,10 +85,19 @@ pub fn snap_to_element(x: i32, y: i32) -> Option<(i32, i32)> {
         let mut pos_value: core_foundation::base::CFTypeRef = ptr::null();
         let mut size_value: core_foundation::base::CFTypeRef = ptr::null();
 
-        let pos_err = AXUIElementCopyAttributeValue(element, position_key.as_concrete_TypeRef(), &mut pos_value);
-        let size_err = AXUIElementCopyAttributeValue(element, size_key.as_concrete_TypeRef(), &mut size_value);
+        let pos_err = AXUIElementCopyAttributeValue(
+            element,
+            position_key.as_concrete_TypeRef(),
+            &mut pos_value,
+        );
+        let size_err =
+            AXUIElementCopyAttributeValue(element, size_key.as_concrete_TypeRef(), &mut size_value);
 
-        if pos_err != K_AX_ERROR_SUCCESS || size_err != K_AX_ERROR_SUCCESS || pos_value.is_null() || size_value.is_null() {
+        if pos_err != K_AX_ERROR_SUCCESS
+            || size_err != K_AX_ERROR_SUCCESS
+            || pos_value.is_null()
+            || size_value.is_null()
+        {
             if !pos_value.is_null() {
                 core_foundation::base::CFRelease(pos_value);
             }
@@ -105,10 +109,21 @@ pub fn snap_to_element(x: i32, y: i32) -> Option<(i32, i32)> {
         }
 
         let mut point = CGPoint { x: 0.0, y: 0.0 };
-        let mut size = CGSize { width: 0.0, height: 0.0 };
+        let mut size = CGSize {
+            width: 0.0,
+            height: 0.0,
+        };
 
-        let pos_ok = AXValueGetValue(pos_value, K_AX_VALUE_CG_POINT_TYPE, &mut point as *mut _ as *mut _);
-        let size_ok = AXValueGetValue(size_value, K_AX_VALUE_CG_SIZE_TYPE, &mut size as *mut _ as *mut _);
+        let pos_ok = AXValueGetValue(
+            pos_value,
+            K_AX_VALUE_CG_POINT_TYPE,
+            &mut point as *mut _ as *mut _,
+        );
+        let size_ok = AXValueGetValue(
+            size_value,
+            K_AX_VALUE_CG_SIZE_TYPE,
+            &mut size as *mut _ as *mut _,
+        );
 
         core_foundation::base::CFRelease(pos_value);
         core_foundation::base::CFRelease(size_value);

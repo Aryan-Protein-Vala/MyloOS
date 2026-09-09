@@ -1,12 +1,12 @@
 #[cfg(target_os = "windows")]
 pub fn init_event_hooks(app: tauri::AppHandle) {
+    use crate::telemetry::TelemetryPayload;
     use std::time::Duration;
     use tauri::Emitter;
     use tokio::time::sleep;
     use windows::Win32::System::SystemInformation::GetTickCount;
     use windows::Win32::UI::Input::KeyboardAndMouse::{GetLastInputInfo, LASTINPUTINFO};
     use windows::Win32::UI::WindowsAndMessaging::{GetForegroundWindow, GetWindowTextW};
-    use crate::telemetry::TelemetryPayload;
 
     log::info!("[MYLO Telemetry] Initializing Windows native event hooks...");
 
@@ -36,7 +36,14 @@ pub fn init_event_hooks(app: tauri::AppHandle) {
                                 let title = String::from_utf16_lossy(&buffer[..len as usize]);
                                 let title = title.trim();
 
-                                let dev_tools = ["Visual Studio", "Code", "Terminal", "PowerShell", "cmd", "Command Prompt"];
+                                let dev_tools = [
+                                    "Visual Studio",
+                                    "Code",
+                                    "Terminal",
+                                    "PowerShell",
+                                    "cmd",
+                                    "Command Prompt",
+                                ];
                                 if dev_tools.iter().any(|&tool| title.contains(tool)) {
                                     log::info!(
                                         "[MYLO Telemetry] Windows developer tool detected: '{}' (idle {}s), triggering overlay",

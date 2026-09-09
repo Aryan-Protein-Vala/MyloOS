@@ -46,9 +46,15 @@ fn encode_crop(cropped: image::RgbaImage) -> Result<String, String> {
 
     let cropped = if cw > MAX_EDGE || ch > MAX_EDGE {
         let (nw, nh) = if cw >= ch {
-            (MAX_EDGE, ((MAX_EDGE as f32 * ch as f32) / cw as f32).round().max(1.0) as u32)
+            (
+                MAX_EDGE,
+                ((MAX_EDGE as f32 * ch as f32) / cw as f32).round().max(1.0) as u32,
+            )
         } else {
-            (((MAX_EDGE as f32 * cw as f32) / ch as f32).round().max(1.0) as u32, MAX_EDGE)
+            (
+                ((MAX_EDGE as f32 * cw as f32) / ch as f32).round().max(1.0) as u32,
+                MAX_EDGE,
+            )
         };
         image::imageops::resize(&cropped, nw, nh, FilterType::Triangle)
     } else {
@@ -149,7 +155,13 @@ mod win {
 
         fn new(ctx: Context<Self::Flags>) -> Result<Self, Self::Error> {
             let (x, y, width, height, sender) = ctx.flags;
-            Ok(Self { x, y, width, height, sender: Some(sender) })
+            Ok(Self {
+                x,
+                y,
+                width,
+                height,
+                sender: Some(sender),
+            })
         }
 
         fn on_frame_arrived(
@@ -164,9 +176,14 @@ mod win {
             let surface_w = frame.width();
             let surface_h = frame.height();
 
-            let Some((cx, cy, cw, ch)) =
-                clamp_crop(self.x, self.y, self.width, self.height, surface_w, surface_h)
-            else {
+            let Some((cx, cy, cw, ch)) = clamp_crop(
+                self.x,
+                self.y,
+                self.width,
+                self.height,
+                surface_w,
+                surface_h,
+            ) else {
                 self.reply(Err("Selection is outside the captured display".to_string()));
                 return Ok(());
             };
@@ -197,7 +214,9 @@ mod win {
             }
 
             let Some(img) = image::RgbaImage::from_raw(cw, ch, pixels) else {
-                self.reply(Err("Frame buffer size did not match crop dimensions".to_string()));
+                self.reply(Err(
+                    "Frame buffer size did not match crop dimensions".to_string()
+                ));
                 return Ok(());
             };
 
@@ -210,7 +229,9 @@ mod win {
         /// session revoked) — without replying here the caller would hang
         /// until the timeout.
         fn on_closed(&mut self) -> Result<(), Self::Error> {
-            self.reply(Err("Capture session closed before a frame arrived".to_string()));
+            self.reply(Err(
+                "Capture session closed before a frame arrived".to_string()
+            ));
             Ok(())
         }
     }
@@ -246,7 +267,12 @@ mod win {
         }
     }
 
-    pub async fn capture(x: i32, y: i32, width: u32, height: u32) -> Result<Option<String>, String> {
+    pub async fn capture(
+        x: i32,
+        y: i32,
+        width: u32,
+        height: u32,
+    ) -> Result<Option<String>, String> {
         let (hmonitor, origin_x, origin_y) = monitor_at(x, y)?;
 
         let local_x = x - origin_x;
@@ -282,12 +308,7 @@ mod win {
             })
             .map_err(|e| format!("Failed to spawn capture thread: {e}"))?;
 
-        match tokio::time::timeout(
-            std::time::Duration::from_secs(CAPTURE_TIMEOUT_SECS),
-            rx,
-        )
-        .await
-        {
+        match tokio::time::timeout(std::time::Duration::from_secs(CAPTURE_TIMEOUT_SECS), rx).await {
             Ok(Ok(Ok(b64))) => Ok(Some(b64)),
             Ok(Ok(Err(e))) => Err(e),
             // Sender dropped: CaptureHandler::start bailed before constructing
@@ -295,7 +316,9 @@ mod win {
             Ok(Err(_)) => Err(
                 "Screen capture is unavailable. Windows 10 1903 or newer is required.".to_string(),
             ),
-            Err(_) => Err(format!("Screen capture timed out after {CAPTURE_TIMEOUT_SECS}s")),
+            Err(_) => Err(format!(
+                "Screen capture timed out after {CAPTURE_TIMEOUT_SECS}s"
+            )),
         }
     }
 }
@@ -337,10 +360,18 @@ mod mac {
         if let Some(primary) = monitors.iter().find(|m| m.is_primary().unwrap_or(false)) {
             return Ok(primary.clone());
         }
-        monitors.into_iter().next().ok_or_else(|| "No displays detected".to_string())
+        monitors
+            .into_iter()
+            .next()
+            .ok_or_else(|| "No displays detected".to_string())
     }
 
-    pub async fn capture(x: i32, y: i32, width: u32, height: u32) -> Result<Option<String>, String> {
+    pub async fn capture(
+        x: i32,
+        y: i32,
+        width: u32,
+        height: u32,
+    ) -> Result<Option<String>, String> {
         let work = tokio::task::spawn_blocking(move || -> Result<Option<String>, String> {
             let monitor = monitor_at(x, y)?;
 
@@ -364,9 +395,14 @@ mod mac {
             let origin_x = (reported_x as f64 * true_scale).round() as i32;
             let origin_y = (reported_y as f64 * true_scale).round() as i32;
 
-            let Some((cx, cy, cw, ch)) =
-                clamp_crop(x - origin_x, y - origin_y, width, height, img.width(), img.height())
-            else {
+            let Some((cx, cy, cw, ch)) = clamp_crop(
+                x - origin_x,
+                y - origin_y,
+                width,
+                height,
+                img.width(),
+                img.height(),
+            ) else {
                 return Err("Selection is outside the captured display".to_string());
             };
 
@@ -378,7 +414,9 @@ mod mac {
         {
             Ok(Ok(result)) => result,
             Ok(Err(e)) => Err(format!("Capture task panicked: {e}")),
-            Err(_) => Err(format!("Screen capture timed out after {CAPTURE_TIMEOUT_SECS}s")),
+            Err(_) => Err(format!(
+                "Screen capture timed out after {CAPTURE_TIMEOUT_SECS}s"
+            )),
         }
     }
 }
@@ -424,18 +462,27 @@ mod tests {
 
     #[test]
     fn crop_inside_surface_is_unchanged() {
-        assert_eq!(clamp_crop(10, 20, 100, 50, 1920, 1080), Some((10, 20, 100, 50)));
+        assert_eq!(
+            clamp_crop(10, 20, 100, 50, 1920, 1080),
+            Some((10, 20, 100, 50))
+        );
     }
 
     #[test]
     fn crop_overhanging_right_edge_is_truncated() {
-        assert_eq!(clamp_crop(1900, 0, 100, 50, 1920, 1080), Some((1900, 0, 20, 50)));
+        assert_eq!(
+            clamp_crop(1900, 0, 100, 50, 1920, 1080),
+            Some((1900, 0, 20, 50))
+        );
     }
 
     #[test]
     fn crop_starting_off_left_edge_is_clipped_not_shifted() {
         // Origin -10 with width 100 covers 0..90 on this surface.
-        assert_eq!(clamp_crop(-10, 0, 100, 50, 1920, 1080), Some((0, 0, 90, 50)));
+        assert_eq!(
+            clamp_crop(-10, 0, 100, 50, 1920, 1080),
+            Some((0, 0, 90, 50))
+        );
     }
 
     #[test]

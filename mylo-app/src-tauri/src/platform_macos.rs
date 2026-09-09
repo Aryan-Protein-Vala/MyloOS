@@ -18,15 +18,15 @@
 //!   apps that are in native fullscreen
 
 #[cfg(target_os = "macos")]
-use objc::{msg_send, runtime::Object, sel, sel_impl};
-#[cfg(target_os = "macos")]
-use tauri::Manager;
+use core_foundation::base::TCFType;
 #[cfg(target_os = "macos")]
 use core_foundation::dictionary::CFDictionaryRef;
 #[cfg(target_os = "macos")]
 use core_foundation::string::CFString;
 #[cfg(target_os = "macos")]
-use core_foundation::base::TCFType;
+use objc::{msg_send, runtime::Object, sel, sel_impl};
+#[cfg(target_os = "macos")]
+use tauri::Manager;
 
 /// `NSWindowSharingNone` — excluded from screen sharing and recording.
 #[cfg(target_os = "macos")]
@@ -168,14 +168,14 @@ pub fn check_accessibility_permission() -> bool {
 pub fn request_accessibility_permission() -> bool {
     use core_foundation::boolean::CFBoolean;
     use core_foundation::dictionary::CFDictionary;
-    
+
     // Create the options dictionary: { kAXTrustedCheckOptionPrompt: true }
     // Hardcode the string for kAXTrustedCheckOptionPrompt instead of linking it directly
     let key = CFString::new("AXTrustedCheckOptionPrompt");
     let value = CFBoolean::true_value();
-    
+
     let dict = CFDictionary::from_CFType_pairs(&[(key.as_CFType(), value.as_CFType())]);
-    
+
     unsafe { AXIsProcessTrustedWithOptions(dict.as_concrete_TypeRef()) }
 }
 
@@ -190,13 +190,21 @@ pub fn request_screen_recording_permission() -> bool {
 }
 
 #[cfg(not(target_os = "macos"))]
-pub fn check_accessibility_permission() -> bool { true }
+pub fn check_accessibility_permission() -> bool {
+    true
+}
 
 #[cfg(not(target_os = "macos"))]
-pub fn request_accessibility_permission() -> bool { true }
+pub fn request_accessibility_permission() -> bool {
+    true
+}
 
 #[cfg(not(target_os = "macos"))]
-pub fn check_screen_recording_permission() -> bool { true }
+pub fn check_screen_recording_permission() -> bool {
+    true
+}
 
 #[cfg(not(target_os = "macos"))]
-pub fn request_screen_recording_permission() -> bool { true }
+pub fn request_screen_recording_permission() -> bool {
+    true
+}

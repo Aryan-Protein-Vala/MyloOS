@@ -1,27 +1,31 @@
 #![allow(unexpected_cfgs)]
 
-pub mod ipc;
-pub mod hotkey;
-pub mod storage;
-pub mod screen_capture;
-pub mod input_injector;
-pub mod platform_macos;
-pub mod state;
-pub mod telemetry;
-pub mod orchestrator;
-pub mod ui_snapper;
-pub mod security;
 pub mod db;
+pub mod hotkey;
+pub mod input_injector;
+pub mod ipc;
+pub mod orchestrator;
+pub mod platform_macos;
 pub mod prompts;
+pub mod screen_capture;
+pub mod security;
+pub mod state;
+pub mod storage;
+pub mod telemetry;
+pub mod ui_snapper;
 
-use tauri::{Manager, menu::{MenuBuilder, MenuItemBuilder}, tray::TrayIconBuilder};
+use tauri::{
+    menu::{MenuBuilder, MenuItemBuilder},
+    tray::TrayIconBuilder,
+    Manager,
+};
 
 #[cfg(target_os = "windows")]
 use windows::Win32::Foundation::HWND;
 #[cfg(target_os = "windows")]
 use windows::Win32::UI::WindowsAndMessaging::{
-    SetWindowDisplayAffinity, GetWindowLongW, SetWindowLongW,
-    GWL_EXSTYLE, WS_EX_LAYERED, WS_EX_TRANSPARENT, WS_EX_TOPMOST, WDA_EXCLUDEFROMCAPTURE,
+    GetWindowLongW, SetWindowDisplayAffinity, SetWindowLongW, GWL_EXSTYLE, WDA_EXCLUDEFROMCAPTURE,
+    WS_EX_LAYERED, WS_EX_TOPMOST, WS_EX_TRANSPARENT,
 };
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -39,6 +43,8 @@ pub fn run() {
             ipc::get_active_provider,
             ipc::delete_api_key,
             ipc::list_saved_providers,
+            ipc::save_license_key,
+            ipc::get_license_key,
             ipc::get_shortcuts,
             ipc::get_platform,
             ipc::set_overlay_mode,
@@ -97,15 +103,23 @@ pub fn run() {
             let _ = db::init_db(app.handle());
 
             // ── System Tray ──
+            let open_item = MenuItemBuilder::with_id("open", "Open Dashboard").build(app)?;
             let quit_item = MenuItemBuilder::with_id("quit", "Quit MYLO").build(app)?;
-            let menu = MenuBuilder::new(app).items(&[&quit_item]).build()?;
+            let menu = MenuBuilder::new(app)
+                .items(&[&open_item, &quit_item])
+                .build()?;
             let mut tray_builder = TrayIconBuilder::new().menu(&menu);
             if let Some(icon) = app.default_window_icon().cloned() {
                 tray_builder = tray_builder.icon(icon);
             }
             let _tray = tray_builder
                 .on_menu_event(move |app, event| {
-                    if event.id == quit_item.id() {
+                    if event.id == "open" {
+                        if let Some(main) = app.get_webview_window("main") {
+                            let _ = main.show();
+                            let _ = main.set_focus();
+                        }
+                    } else if event.id == "quit" {
                         app.exit(0);
                     }
                 })
@@ -123,27 +137,27 @@ pub fn run() {
         })
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
-        .run(|app_handle, event| {
-            match event {
-                tauri::RunEvent::Exit | tauri::RunEvent::ExitRequested { .. } => {
-                    let state = app_handle.state::<state::AppState>();
-                    let mut agents = state.active_agents.lock().unwrap_or_else(|p| p.into_inner());
-                    for (_, handle) in agents.drain() {
-                        handle.abort();
-                    }
+        .run(|app_handle, event| match event {
+            tauri::RunEvent::Exit | tauri::RunEvent::ExitRequested { .. } => {
+                let state = app_handle.state::<state::AppState>();
+                let mut agents = state
+                    .active_agents
+                    .lock()
+                    .unwrap_or_else(|p| p.into_inner());
+                for (_, handle) in agents.drain() {
+                    handle.abort();
                 }
-                tauri::RunEvent::WindowEvent {
-                    label,
-                    event: tauri::WindowEvent::CloseRequested { api, .. },
-                    ..
-                } if label == "main" || label == "overlay" => {
-                    api.prevent_close();
-                    if let Some(window) = app_handle.get_webview_window(&label) {
-                        let _ = window.hide();
-                    }
-                }
-                _ => {}
             }
+            tauri::RunEvent::WindowEvent {
+                label,
+                event: tauri::WindowEvent::CloseRequested { api, .. },
+                ..
+            } if label == "main" || label == "overlay" => {
+                api.prevent_close();
+                if let Some(window) = app_handle.get_webview_window(&label) {
+                    let _ = window.hide();
+                }
+            }
+            _ => {}
         });
 }
-pub mod test_autoplay;

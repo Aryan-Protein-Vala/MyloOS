@@ -1,8 +1,8 @@
+#[cfg(target_os = "macos")]
+use std::time::Duration;
 use tauri::AppHandle;
 #[cfg(target_os = "macos")]
 use tauri::Emitter;
-#[cfg(target_os = "macos")]
-use std::time::Duration;
 #[cfg(target_os = "macos")]
 use tokio::time::sleep;
 
@@ -45,7 +45,7 @@ fn get_idle_seconds() -> u64 {
 
 #[cfg(target_os = "macos")]
 fn get_frontmost_app_name() -> String {
-    use objc::{class, msg_send, runtime::Object, sel, sel_impl, rc::autoreleasepool};
+    use objc::{class, msg_send, rc::autoreleasepool, runtime::Object, sel, sel_impl};
 
     autoreleasepool(|| unsafe {
         let workspace: *mut Object = msg_send![class!(NSWorkspace), sharedWorkspace];
@@ -82,13 +82,21 @@ pub fn start_telemetry(app: AppHandle) {
             let app_name = get_frontmost_app_name();
 
             // If idle >= 60s and app is a developer environment (VSCode, Cursor, Xcode, etc.)
-            if idle_secs >= 60 && matches!(app_name.as_str(), "Code" | "Cursor" | "Xcode" | "iTerm2" | "Terminal") {
+            if idle_secs >= 60
+                && matches!(
+                    app_name.as_str(),
+                    "Code" | "Cursor" | "Xcode" | "iTerm2" | "Terminal"
+                )
+            {
                 let _ = crate::ipc::toggle_overlay(app.clone(), true, false);
 
-                let _ = app.emit("telemetry_trigger", TelemetryPayload {
-                    active_app: app_name.clone(),
-                    idle_time_secs: idle_secs,
-                });
+                let _ = app.emit(
+                    "telemetry_trigger",
+                    TelemetryPayload {
+                        active_app: app_name.clone(),
+                        idle_time_secs: idle_secs,
+                    },
+                );
 
                 // Back off for 60 seconds after triggering to prevent spam
                 sleep(Duration::from_secs(60)).await;

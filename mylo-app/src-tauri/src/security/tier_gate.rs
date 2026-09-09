@@ -8,7 +8,7 @@ pub enum Tier {
 }
 
 /// Enforces that the user has at least the required tier.
-/// In the real implementation, this should hit an external licensing API if the 
+/// In the real implementation, this should hit an external licensing API if the
 /// local cache is expired. For now, it checks the local `storage.rs` license key.
 pub fn enforce_tier(app: &AppHandle, required_tier: Tier) -> Result<(), String> {
     let current_tier = get_current_tier(app);
@@ -28,7 +28,10 @@ pub fn enforce_tier(app: &AppHandle, required_tier: Tier) -> Result<(), String> 
     if current_level >= required_level {
         Ok(())
     } else {
-        Err(format!("Access Denied: This feature requires the {:?} tier. Please upgrade your license.", required_tier))
+        Err(format!(
+            "Access Denied: This feature requires the {:?} tier. Please upgrade your license.",
+            required_tier
+        ))
     }
 }
 

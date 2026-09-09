@@ -2,7 +2,7 @@
 import Link from 'next/link'
 import { ArrowLeft, Cpu, FastForward, BrainCircuit, MousePointer2, Keyboard, CheckCircle2, Zap, Activity, MessageSquare, RefreshCw } from 'lucide-react'
 import { useEffect, useState } from 'react';
-import { getChatHistory, ChatMessage, checkForAppUpdates, installAppUpdate, isTauri } from '../../lib/tauri-ipc';
+import { getChatHistory, ChatMessage, checkForAppUpdates, installAppUpdate, isTauri } from '@/lib/tauri-ipc';
 
 type UpdateStatus = 'idle' | 'checking' | 'available' | 'installing' | 'installed' | 'error';
 
@@ -69,7 +69,7 @@ export default function Dashboard() {
       }
     }, 2000);
     
-    getChatHistory(10).then(history => {
+    getChatHistory(10).then((history: ChatMessage[]) => {
       if (mounted) {
         setMessages([...history].reverse());
       }

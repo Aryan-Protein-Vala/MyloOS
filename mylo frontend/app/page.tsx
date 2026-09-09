@@ -212,7 +212,7 @@ export default function Page() {
       </SectionTitle>
       <div className="pricing-grid">
         <PriceCard free title="MYLO Free (BYOK)" price="$0" suffix="/ month" badge="100% Private • Full Takeover" items={['Plug in your own API keys — OpenRouter, OpenAI, Anthropic, ElevenLabs. You pay the APIs, we charge nothing.', 'Full GUI takeover, voice, ghost clicks — the works', 'Local wake word & on-device OCR', 'Basic goldfish memory — remembers the session, but wakes up with zero braincells tomorrow']} cta="Grab Free Access" />
-        <PriceCard title="MYLO Pro" price="$14.99" suffix="/ month" badge="Most Popular • Cortex Enabled" items={[<span key="1"><CortexHover>Cortex</CortexHover> switched on — it starts knowing you</span>, 'No API keys needed. Token budget included.', 'Powered strictly by Claude Sonnet 4.5 & Haiku 4.5 (because we aren\\'t savages)', 'Your workflows survive session restarts']} cta="Get Pro Access" />
+        <PriceCard title="MYLO Pro" price="$14.99" suffix="/ month" badge="Most Popular • Cortex Enabled" items={[<span key="1"><CortexHover>Cortex</CortexHover> switched on — it starts knowing you</span>, 'No API keys needed. Token budget included.', "Powered strictly by Claude Sonnet 4.5 & Haiku 4.5 (because we are not savages)", 'Your workflows survive session restarts']} cta="Get Pro Access" />
         <PriceCard elite title="MYLO Elite" price="$49.99" suffix="/ month" badge="The Whole Damn Thing" items={['Unlimited Cortex memory — it never forgets anything', 'Unlimited Claude Sonnet 4.5 & Haiku 4.5 + future frontier models', 'Background agent spawning — works while you sleep', 'Premium ElevenLabs voice — it sounds alive']} cta="Get Elite Access" />
       </div>
     </section>

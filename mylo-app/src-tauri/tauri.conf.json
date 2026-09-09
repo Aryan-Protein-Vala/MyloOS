@@ -57,12 +57,5 @@
       "debugApplicationIdSuffix": ".debug"
     }
   },
-  "plugins": {
-    "updater": {
-      "endpoints": [
-        "https://releases.myloos.com/update/{{target}}/{{current_version}}"
-      ],
-      "pubkey": "YOUR_UPDATER_PUBLIC_KEY"
-    }
-  }
+  "plugins": {}
 }

@@ -1,5 +1,5 @@
-use tauri::AppHandle;
 use keyring::Entry;
+use tauri::AppHandle;
 
 pub const SUPPORTED_PROVIDERS: [&str; 5] = ["gemini", "openai", "groq", "sarvam", "anthropic"];
 
@@ -16,7 +16,7 @@ pub fn save_key(_app: &AppHandle, provider: &str, key: &str) -> Result<(), Strin
 
 pub fn get_key(_app: &AppHandle, provider: &str) -> Option<String> {
     let p = normalize_provider(provider);
-    
+
     // 1. Try keyring
     if let Ok(entry) = Entry::new("mylo_app_keys", &p) {
         if let Ok(pwd) = entry.get_password() {

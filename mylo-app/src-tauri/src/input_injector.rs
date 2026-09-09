@@ -88,7 +88,10 @@ pub fn validate(action: &DoAction, bounds: DesktopBounds) -> Result<(), String> 
 
     if needs_point {
         let (Some(x), Some(y)) = (action.x, action.y) else {
-            return Err(format!("'{}' requires x and y coordinates", action.action_type));
+            return Err(format!(
+                "'{}' requires x and y coordinates",
+                action.action_type
+            ));
         };
         if !bounds.contains(x, y) {
             return Err(format!(
@@ -133,10 +136,7 @@ pub fn validate(action: &DoAction, bounds: DesktopBounds) -> Result<(), String> 
 /// Execute a **previously validated** action.
 pub fn execute_action(action: &DoAction, bounds: DesktopBounds) -> Result<(), String> {
     use enigo::{
-        Axis, Button,
-        Coordinate::Abs,
-        Direction::Click,
-        Enigo, Keyboard, Mouse, Settings,
+        Axis, Button, Coordinate::Abs, Direction::Click, Enigo, Keyboard, Mouse, Settings,
     };
 
     // Validate again here rather than trusting the caller. This function is
@@ -182,15 +182,23 @@ pub fn execute_action(action: &DoAction, bounds: DesktopBounds) -> Result<(), St
         let x = action.x.ok_or("missing x")?;
         let y = action.y.ok_or("missing y")?;
         if !bounds.contains(x, y) {
-            return Err(format!("Target coordinates ({x}, {y}) are outside desktop bounds"));
+            return Err(format!(
+                "Target coordinates ({x}, {y}) are outside desktop bounds"
+            ));
         }
         if x == 0 && y == 0 {
             return Err("Corner failsafe triggered: target is (0, 0)".to_string());
         }
-        
+
         if let Some((nx, ny)) = crate::ui_snapper::snap_to_element(x, y) {
             if bounds.contains(nx, ny) && !(nx == 0 && ny == 0) {
-                log::info!("[MYLO snap] Vision target snapped from ({}, {}) to native center ({}, {})", x, y, nx, ny);
+                log::info!(
+                    "[MYLO snap] Vision target snapped from ({}, {}) to native center ({}, {})",
+                    x,
+                    y,
+                    nx,
+                    ny
+                );
                 return Ok((nx, ny));
             } else {
                 log::warn!(
@@ -242,7 +250,9 @@ pub fn execute_action(action: &DoAction, bounds: DesktopBounds) -> Result<(), St
                 }
             }
             let amount = action.scroll_amount.ok_or("missing scrollAmount")?;
-            enigo.scroll(amount, Axis::Vertical).map_err(|e| e.to_string())?;
+            enigo
+                .scroll(amount, Axis::Vertical)
+                .map_err(|e| e.to_string())?;
         }
         other => return Err(format!("Unknown action type '{other}'")),
     }
@@ -254,7 +264,12 @@ pub fn execute_action(action: &DoAction, bounds: DesktopBounds) -> Result<(), St
 mod tests {
     use super::*;
 
-    const BOUNDS: DesktopBounds = DesktopBounds { left: 0, top: 0, right: 1920, bottom: 1080 };
+    const BOUNDS: DesktopBounds = DesktopBounds {
+        left: 0,
+        top: 0,
+        right: 1920,
+        bottom: 1080,
+    };
 
     fn action(kind: &str) -> DoAction {
         DoAction {
@@ -289,7 +304,12 @@ mod tests {
     #[test]
     fn negative_origin_desktops_are_supported() {
         // A second monitor to the left of the primary gives negative coords.
-        let bounds = DesktopBounds { left: -1920, top: 0, right: 1920, bottom: 1080 };
+        let bounds = DesktopBounds {
+            left: -1920,
+            top: 0,
+            right: 1920,
+            bottom: 1080,
+        };
         let mut a = action("click");
         a.x = Some(-800);
         assert!(validate(&a, bounds).is_ok());
@@ -324,7 +344,10 @@ mod tests {
         let mut a = action("scroll");
         // y = 100 must NOT be interpreted as 100 notches of scrolling.
         a.scroll_amount = None;
-        assert!(validate(&a, BOUNDS).is_err(), "scroll must require scrollAmount");
+        assert!(
+            validate(&a, BOUNDS).is_err(),
+            "scroll must require scrollAmount"
+        );
 
         a.scroll_amount = Some(3);
         assert!(validate(&a, BOUNDS).is_ok());
@@ -370,7 +393,9 @@ mod tests {
         assert!(validate(&a, BOUNDS).is_ok());
         let res = execute_action(&a, BOUNDS);
         if let Err(e) = res {
-            assert!(e.contains("Could not access the input system") || e.contains("Corner failsafe"));
+            assert!(
+                e.contains("Could not access the input system") || e.contains("Corner failsafe")
+            );
         }
     }
 }

@@ -774,6 +774,7 @@ export default function OverlayPage() {
 
   const isDoDrawing = mode === 'do' && (doPhase === 'idle' || doPhase === 'drawing')
   const needsPointerEvents =
+    mode === 'coach' ||
     (mode === 'ask' && isAskDrawable) ||
     (mode === 'ask' && !!askSelection) ||
     isDoDrawing ||
@@ -813,7 +814,7 @@ export default function OverlayPage() {
           </div>
           <div className="mt-1">
             <span className="inline-block bg-black/85 text-white/90 border border-white/20 px-2 py-0.5 rounded shadow-lg text-[9px] font-mono">
-              double-Esc to dismiss
+              ⌘⇧Esc / Ctrl+Alt+Esc to dismiss
             </span>
           </div>
         </div>
@@ -881,10 +882,20 @@ export default function OverlayPage() {
             <RoughCircle className="text-[var(--red)] drop-shadow-md" />
           </div>
           <div className="absolute" style={{ left: targetPos.x + 80, top: targetPos.y - 80 }}>
-            <div className="speech pointer-events-auto">
-              <b>MYLO says:</b>
-              <br />
-              Click here to proceed.
+            <div className="speech pointer-events-auto flex flex-col gap-2">
+              <div className="flex justify-between items-start gap-4">
+                <b>MYLO says:</b>
+                <button onClick={dismissOverlay} className="text-[var(--ink)] hover:text-black">
+                  <X size={14} />
+                </button>
+              </div>
+              <span className="text-sm">Click here to proceed.</span>
+              <button 
+                onClick={dismissOverlay}
+                className="mt-2 bg-[var(--blue)] hover:bg-blue-600 text-white border-2 border-[var(--ink)] px-2 py-1 font-['Courier_New'] text-[10px] font-bold shadow-[2px_2px_0_var(--ink)] transition-all active:translate-x-[1px] active:translate-y-[1px]"
+              >
+                Done
+              </button>
             </div>
           </div>
         </>

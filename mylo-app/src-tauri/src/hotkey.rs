@@ -13,9 +13,7 @@
 //! instead of hiding the window.
 
 use tauri::{AppHandle, Emitter, Manager};
-use tauri_plugin_global_shortcut::{
-    Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState,
-};
+use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 
 use crate::state::{AppState, OverlayMode};
 
@@ -39,13 +37,21 @@ impl Binding {
         let mut parts: Vec<&str> = Vec::new();
 
         if self.modifiers.contains(Modifiers::SUPER) {
-            parts.push(if cfg!(target_os = "macos") { "Cmd" } else { "Win" });
+            parts.push(if cfg!(target_os = "macos") {
+                "Cmd"
+            } else {
+                "Win"
+            });
         }
         if self.modifiers.contains(Modifiers::CONTROL) {
             parts.push("Ctrl");
         }
         if self.modifiers.contains(Modifiers::ALT) {
-            parts.push(if cfg!(target_os = "macos") { "Option" } else { "Alt" });
+            parts.push(if cfg!(target_os = "macos") {
+                "Option"
+            } else {
+                "Alt"
+            });
         }
         if self.modifiers.contains(Modifiers::SHIFT) {
             parts.push("Shift");
@@ -129,7 +135,11 @@ fn activate(app: &AppHandle, mode: OverlayMode) {
     };
     let state = app.state::<AppState>();
 
-    let next = if state.mode() == mode { OverlayMode::Hidden } else { mode };
+    let next = if state.mode() == mode {
+        OverlayMode::Hidden
+    } else {
+        mode
+    };
     state.set_mode(next);
 
     // Tell the frontend first so it can render the right mode before the
@@ -142,12 +152,22 @@ fn activate(app: &AppHandle, mode: OverlayMode) {
         if let Err(e) = crate::ipc::position_overlay_on_active_monitor(app) {
             log::warn!("[MYLO hotkeys] Could not place the overlay: {e}");
         }
+        
+        // Dynamically steal Escape while the overlay is visible so the user can easily dismiss it
+        let _ = app.global_shortcut().register(Shortcut::new(None, Code::Escape));
+        
         let _ = overlay.show();
     } else {
         state.disarm();
-        *state.last_synthetic_pos.lock().unwrap_or_else(|p| p.into_inner()) = None;
+        *state
+            .last_synthetic_pos
+            .lock()
+            .unwrap_or_else(|p| p.into_inner()) = None;
         let _ = overlay.set_ignore_cursor_events(true);
         let _ = overlay.hide();
+        
+        // Return Escape to the OS
+        let _ = app.global_shortcut().unregister(Shortcut::new(None, Code::Escape));
     }
 }
 
@@ -156,12 +176,18 @@ fn panic_hide(app: &AppHandle) {
     let state = app.state::<AppState>();
     state.set_mode(OverlayMode::Hidden);
     state.disarm();
-    *state.last_synthetic_pos.lock().unwrap_or_else(|p| p.into_inner()) = None;
+    *state
+        .last_synthetic_pos
+        .lock()
+        .unwrap_or_else(|p| p.into_inner()) = None;
     if let Some(overlay) = app.get_webview_window("overlay") {
         let _ = overlay.emit("overlay-state-changed", "hidden");
         let _ = overlay.set_ignore_cursor_events(true);
         let _ = overlay.hide();
     }
+    
+    // Return Escape to the OS
+    let _ = app.global_shortcut().unregister(Shortcut::new(None, Code::Escape));
     log::warn!("[MYLO] Panic hotkey pressed — overlay hidden, pending actions cancelled");
 }
 
@@ -171,46 +197,51 @@ pub fn register_hotkeys(app: &AppHandle) {
         let action = binding.action;
         let label = binding.label();
 
-        let result = app.global_shortcut().on_shortcut(
-            binding.shortcut(),
-            move |_app, _shortcut, event| {
-                if action == "ptt" {
-                    if event.state() == ShortcutState::Pressed {
-                        // Debounce: ignore repeated Pressed events caused by OS key autorepeat
-                        if !PTT_ACTIVE.swap(true, std::sync::atomic::Ordering::SeqCst) {
-                            let state = handle.state::<AppState>();
-                            state.set_mode(OverlayMode::Agent);
-                            if let Some(overlay) = handle.get_webview_window("overlay") {
-                                if let Err(e) = crate::ipc::position_overlay_on_active_monitor(&handle) {
-                                    log::warn!("[MYLO hotkeys] Could not place overlay for PTT: {e}");
+        let result =
+            app.global_shortcut()
+                .on_shortcut(binding.shortcut(), move |_app, _shortcut, event| {
+                    if action == "ptt" {
+                        if event.state() == ShortcutState::Pressed {
+                            // Debounce: ignore repeated Pressed events caused by OS key autorepeat
+                            if !PTT_ACTIVE.swap(true, std::sync::atomic::Ordering::SeqCst) {
+                                let state = handle.state::<AppState>();
+                                state.set_mode(OverlayMode::Agent);
+                                if let Some(overlay) = handle.get_webview_window("overlay") {
+                                    if let Err(e) =
+                                        crate::ipc::position_overlay_on_active_monitor(&handle)
+                                    {
+                                        log::warn!(
+                                            "[MYLO hotkeys] Could not place overlay for PTT: {e}"
+                                        );
+                                    }
+                                    let _ = overlay.set_ignore_cursor_events(true);
+                                    let _ = overlay.show();
+                                    let _ = overlay.emit("ptt-state-changed", "pressed");
                                 }
-                                let _ = overlay.set_ignore_cursor_events(true);
-                                let _ = overlay.show();
-                                let _ = overlay.emit("ptt-state-changed", "pressed");
+                            }
+                        } else if event.state() == ShortcutState::Released
+                            && PTT_ACTIVE.swap(false, std::sync::atomic::Ordering::SeqCst)
+                        {
+                            if let Some(overlay) = handle.get_webview_window("overlay") {
+                                let _ = overlay.emit("ptt-state-changed", "released");
                             }
                         }
-                    } else if event.state() == ShortcutState::Released && PTT_ACTIVE.swap(false, std::sync::atomic::Ordering::SeqCst) {
-                        if let Some(overlay) = handle.get_webview_window("overlay") {
-                            let _ = overlay.emit("ptt-state-changed", "released");
-                        }
+                        return;
                     }
-                    return;
-                }
 
-                // The handler is invoked on both key-down and key-up. Without
-                // this guard every press runs the body twice.
-                if event.state() != ShortcutState::Pressed {
-                    return;
-                }
-                match action {
-                    "ask" => activate(&handle, OverlayMode::Ask),
-                    "do" => activate(&handle, OverlayMode::Do),
-                    "coach" => activate(&handle, OverlayMode::Coach),
-                    "panic" => panic_hide(&handle),
-                    other => log::error!("[MYLO hotkeys] Unhandled action '{other}'"),
-                }
-            },
-        );
+                    // The handler is invoked on both key-down and key-up. Without
+                    // this guard every press runs the body twice.
+                    if event.state() != ShortcutState::Pressed {
+                        return;
+                    }
+                    match action {
+                        "ask" => activate(&handle, OverlayMode::Ask),
+                        "do" => activate(&handle, OverlayMode::Do),
+                        "coach" => activate(&handle, OverlayMode::Coach),
+                        "panic" => panic_hide(&handle),
+                        other => log::error!("[MYLO hotkeys] Unhandled action '{other}'"),
+                    }
+                });
 
         match result {
             Ok(()) => log::info!("[MYLO hotkeys] Registered {label} → {action}"),
@@ -220,6 +251,18 @@ pub fn register_hotkeys(app: &AppHandle) {
             ),
         }
     }
+
+    // Register a standalone Escape handler to easily dismiss the overlay.
+    // It is immediately unregistered so it doesn't swallow Esc system-wide.
+    // It is dynamically registered only when the overlay is shown.
+    let esc = Shortcut::new(None, Code::Escape);
+    let handle = app.clone();
+    let _ = app.global_shortcut().on_shortcut(esc, move |_app, _shortcut, event| {
+        if event.state() == ShortcutState::Pressed {
+            panic_hide(&handle);
+        }
+    });
+    let _ = app.global_shortcut().unregister(esc);
 }
 
 #[cfg(test)]
@@ -230,8 +273,16 @@ mod tests {
     fn every_binding_has_a_readable_label() {
         for b in bindings() {
             let label = b.label();
-            assert!(!label.contains('?'), "{} has an unmapped key code", b.action);
-            assert!(label.contains(" + "), "{} label looks wrong: {label}", b.action);
+            assert!(
+                !label.contains('?'),
+                "{} has an unmapped key code",
+                b.action
+            );
+            assert!(
+                label.contains(" + "),
+                "{} label looks wrong: {label}",
+                b.action
+            );
         }
     }
 

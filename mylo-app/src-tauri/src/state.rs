@@ -80,14 +80,14 @@ impl ActionGuard {
             );
         }
         if expected.as_deref() != Some(action) {
-            return Err(
-                "The action to execute does not match the approved action."
-                    .to_string(),
-            );
+            return Err("The action to execute does not match the approved action.".to_string());
         }
 
         let now = Instant::now();
-        self.recent.retain(|t| now.checked_duration_since(*t).is_some_and(|d| d < RATE_WINDOW));
+        self.recent.retain(|t| {
+            now.checked_duration_since(*t)
+                .is_some_and(|d| d < RATE_WINDOW)
+        });
         if self.recent.len() >= RATE_LIMIT {
             return Err(format!(
                 "Too many actions ({RATE_LIMIT} in {}s). Slow down or restart MYLO.",

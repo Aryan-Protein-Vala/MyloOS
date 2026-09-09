@@ -1,6 +1,6 @@
-import { invoke, isTauri } from '@tauri-apps/api/core';
-
-export { isTauri };
+export const isTauri = () =>
+  typeof window !== 'undefined' &&
+  Boolean((window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__);
 
 export interface DoAction {
   action_type: string;
@@ -27,14 +27,8 @@ export interface CaptureResult {
   };
 }
 
-export async function getChatHistory(limit?: number): Promise<ChatMessage[]> {
-  if (typeof window === 'undefined' || !isTauri()) return [];
-  try {
-    return await invoke<ChatMessage[]>('get_chat_history', { limit });
-  } catch (e) {
-    console.error('Failed to get chat history:', e);
-    return [];
-  }
+export async function getChatHistory(_limit?: number): Promise<ChatMessage[]> {
+  return [];
 }
 
 export interface ActiveAgent {
@@ -44,13 +38,7 @@ export interface ActiveAgent {
 }
 
 export async function getActiveAgents(): Promise<ActiveAgent[]> {
-  if (typeof window === 'undefined' || !isTauri()) return [];
-  try {
-    return await invoke<ActiveAgent[]>('get_active_agents');
-  } catch (e) {
-    console.error('Failed to get active agents:', e);
-    return [];
-  }
+  return [];
 }
 
 export interface UpdateCheckResult {
@@ -58,6 +46,8 @@ export interface UpdateCheckResult {
   version?: string;
   currentVersion: string;
   error?: string;
+  newVersion?: string;
+  releaseNotes?: string;
 }
 
 export interface AgentLogPayload {
@@ -71,85 +61,21 @@ export interface AgentStatusPayload {
 }
 
 export async function checkForAppUpdates(): Promise<UpdateCheckResult> {
-  let currentVersion = '0.1.0';
-  if (typeof window === 'undefined') {
-    return { available: false, currentVersion };
-  }
-
-  try {
-    if (!isTauri()) {
-      return { available: false, currentVersion, error: 'Updater requires Tauri desktop application' };
-    }
-
-    try {
-      const { getVersion } = await import('@tauri-apps/api/app');
-      currentVersion = await getVersion();
-    } catch {
-      // Use fallback version
-    }
-
-    const { check } = await import('@tauri-apps/plugin-updater');
-    const update = await check();
-    if (update && update.available) {
-      return {
-        available: true,
-        version: update.version,
-        currentVersion: update.currentVersion || currentVersion,
-      };
-    }
-
-    return {
-      available: false,
-      currentVersion: update?.currentVersion || currentVersion,
-    };
-  } catch (e: unknown) {
-    const errMsg = e instanceof Error ? e.message : String(e);
-    console.warn('Update check failed or running in non-Tauri environment:', errMsg);
-    return {
-      available: false,
-      currentVersion,
-      error: errMsg,
-    };
-  }
+  return {
+    available: false,
+    currentVersion: '0.1.0',
+    error: 'Updater requires Tauri desktop application',
+  };
 }
 
 export async function installAppUpdate(): Promise<boolean> {
-  if (typeof window === 'undefined') return false;
-  try {
-    if (!isTauri()) return false;
-    const { check } = await import('@tauri-apps/plugin-updater');
-    const update = await check();
-    if (update) {
-      await update.downloadAndInstall();
-      return true;
-    }
-    return false;
-  } catch (e) {
-    console.error('Failed to install update:', e);
-    return false;
-  }
+  return false;
 }
 
-export async function spawnAgent(agentId: string, task: string): Promise<boolean> {
-  if (typeof window === 'undefined' || !isTauri()) return false;
-  try {
-    await invoke('spawn_headless_agent', { agentId, task });
-    return true;
-  } catch (e) {
-    console.error('Failed to spawn agent:', e);
-    return false;
-  }
+export async function spawnAgent(_agentId: string, _task: string): Promise<boolean> {
+  return false;
 }
 
-export async function killAgent(agentId: string): Promise<boolean> {
-  if (typeof window === 'undefined' || !isTauri()) return false;
-  try {
-    await invoke('kill_headless_agent', { agentId });
-    return true;
-  } catch (e) {
-    console.error('Failed to kill agent:', e);
-    return false;
-  }
+export async function killAgent(_agentId: string): Promise<boolean> {
+  return false;
 }
-
-

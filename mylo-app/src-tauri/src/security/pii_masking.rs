@@ -1,7 +1,7 @@
+use base64::{engine::general_purpose, Engine as _};
 use image::{DynamicImage, GenericImage, Rgba};
 use regex::Regex;
 use std::io::Cursor;
-use base64::{Engine as _, engine::general_purpose};
 
 /// A detected piece of text with its bounding box coordinates
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -83,7 +83,11 @@ unsafe impl objc::Encode for CGRect {
 
 #[cfg(target_os = "macos")]
 pub fn perform_native_ocr(img: &DynamicImage) -> Vec<DetectedText> {
-    use objc::{msg_send, sel, sel_impl, runtime::{Class, Object}};
+    use objc::{
+        msg_send,
+        runtime::{Class, Object},
+        sel, sel_impl,
+    };
     use std::ffi::CStr;
     use std::io::Cursor;
     use std::os::raw::{c_char, c_void};
@@ -122,7 +126,10 @@ pub fn perform_native_ocr(img: &DynamicImage) -> Vec<DetectedText> {
 
         // Encode DynamicImage to PNG memory buffer
         let mut image_bytes = Vec::new();
-        if img.write_to(&mut Cursor::new(&mut image_bytes), image::ImageFormat::Png).is_err() {
+        if img
+            .write_to(&mut Cursor::new(&mut image_bytes), image::ImageFormat::Png)
+            .is_err()
+        {
             log::warn!("[MYLO OCR] Failed to encode image to PNG for Vision OCR");
             return vec![];
         }
@@ -280,21 +287,25 @@ pub static PII_REGEX: std::sync::LazyLock<Regex> = std::sync::LazyLock::new(|| {
 /// Masks PII in a raw image buffer (e.g., JPEG or PNG) before sending it to cloud models.
 pub fn mask_pii_in_image(b64_image: &str) -> Result<String, String> {
     log::info!("[MYLO Security] Scanning screenshot for PII before transmission...");
-    
+
     // Decode base64
     let image_data = general_purpose::STANDARD
         .decode(b64_image)
         .map_err(|e| format!("Base64 decode error: {}", e))?;
-        
-    let mut img = image::load_from_memory(&image_data)
-        .map_err(|e| format!("Image decode error: {}", e))?;
-        
+
+    let mut img =
+        image::load_from_memory(&image_data).map_err(|e| format!("Image decode error: {}", e))?;
+
     let detected_blocks = perform_native_ocr(&img);
     let mut masked_count = 0;
-    
+
     for block in detected_blocks {
         if PII_REGEX.is_match(&block.text) {
-            log::info!("[MYLO Security] Detected PII at ({}, {}). Masking...", block.x, block.y);
+            log::info!(
+                "[MYLO Security] Detected PII at ({}, {}). Masking...",
+                block.x,
+                block.y
+            );
             let black = Rgba([0, 0, 0, 255]);
             for y in block.y..(block.y + block.height).min(img.height()) {
                 for x in block.x..(block.x + block.width).min(img.width()) {
@@ -304,15 +315,15 @@ pub fn mask_pii_in_image(b64_image: &str) -> Result<String, String> {
             masked_count += 1;
         }
     }
-    
+
     if masked_count == 0 {
         return Ok(b64_image.to_string());
     }
-    
+
     let mut buffer = Cursor::new(Vec::new());
     img.write_to(&mut buffer, image::ImageFormat::Jpeg)
         .map_err(|e| format!("Image encode error: {}", e))?;
-        
+
     Ok(general_purpose::STANDARD.encode(buffer.into_inner()))
 }
 
