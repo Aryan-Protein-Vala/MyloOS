@@ -152,6 +152,7 @@ jobs:
   site:
     name: Marketing site
     runs-on: ubuntu-latest
+    if: hashFiles('mylo frontend/package.json') != ''
     defaults:
       run:
         working-directory: mylo frontend

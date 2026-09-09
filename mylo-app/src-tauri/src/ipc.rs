@@ -174,11 +174,19 @@ pub fn toggle_overlay(
 
     if visible {
         let _ = position_overlay_on_active_monitor(&app_handle);
-        
-        // Dynamically steal Escape while the overlay is visible so the user can easily dismiss it
-        use tauri_plugin_global_shortcut::{Code, Shortcut, GlobalShortcutExt};
-        let _ = app_handle.global_shortcut().register(Shortcut::new(None, Code::Escape));
-        
+
+        // Dynamically intercept Escape while the overlay is visible so the user can easily dismiss it
+        use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Shortcut, ShortcutState};
+        let handle = app_handle.clone();
+        let _ = app_handle.global_shortcut().on_shortcut(
+            Shortcut::new(None, Code::Escape),
+            move |_app, _shortcut, event| {
+                if event.state() == ShortcutState::Pressed {
+                    crate::hotkey::panic_hide(&handle);
+                }
+            },
+        );
+
         window.show().map_err(|e| e.to_string())?;
     } else {
         state.set_mode(OverlayMode::Hidden);
@@ -191,10 +199,12 @@ pub fn toggle_overlay(
         // never come back up swallowing every click on the desktop.
         let _ = window.set_ignore_cursor_events(true);
         window.hide().map_err(|e| e.to_string())?;
-        
+
         // Return Escape to the OS
-        use tauri_plugin_global_shortcut::{Code, Shortcut, GlobalShortcutExt};
-        let _ = app_handle.global_shortcut().unregister(Shortcut::new(None, Code::Escape));
+        use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Shortcut};
+        let _ = app_handle
+            .global_shortcut()
+            .unregister(Shortcut::new(None, Code::Escape));
     }
 
     let _ = window.set_ignore_cursor_events(click_through);

@@ -152,10 +152,18 @@ fn activate(app: &AppHandle, mode: OverlayMode) {
         if let Err(e) = crate::ipc::position_overlay_on_active_monitor(app) {
             log::warn!("[MYLO hotkeys] Could not place the overlay: {e}");
         }
-        
-        // Dynamically steal Escape while the overlay is visible so the user can easily dismiss it
-        let _ = app.global_shortcut().register(Shortcut::new(None, Code::Escape));
-        
+
+        // Dynamically intercept Escape while the overlay is visible so the user can dismiss it
+        let handle = app.clone();
+        let _ = app.global_shortcut().on_shortcut(
+            Shortcut::new(None, Code::Escape),
+            move |_app, _shortcut, event| {
+                if event.state() == ShortcutState::Pressed {
+                    panic_hide(&handle);
+                }
+            },
+        );
+
         let _ = overlay.show();
     } else {
         state.disarm();
@@ -165,14 +173,16 @@ fn activate(app: &AppHandle, mode: OverlayMode) {
             .unwrap_or_else(|p| p.into_inner()) = None;
         let _ = overlay.set_ignore_cursor_events(true);
         let _ = overlay.hide();
-        
+
         // Return Escape to the OS
-        let _ = app.global_shortcut().unregister(Shortcut::new(None, Code::Escape));
+        let _ = app
+            .global_shortcut()
+            .unregister(Shortcut::new(None, Code::Escape));
     }
 }
 
 /// Hide the overlay and revoke any approved-but-unexecuted action.
-fn panic_hide(app: &AppHandle) {
+pub fn panic_hide(app: &AppHandle) {
     let state = app.state::<AppState>();
     state.set_mode(OverlayMode::Hidden);
     state.disarm();
@@ -185,9 +195,11 @@ fn panic_hide(app: &AppHandle) {
         let _ = overlay.set_ignore_cursor_events(true);
         let _ = overlay.hide();
     }
-    
+
     // Return Escape to the OS
-    let _ = app.global_shortcut().unregister(Shortcut::new(None, Code::Escape));
+    let _ = app
+        .global_shortcut()
+        .unregister(Shortcut::new(None, Code::Escape));
     log::warn!("[MYLO] Panic hotkey pressed — overlay hidden, pending actions cancelled");
 }
 
@@ -251,18 +263,6 @@ pub fn register_hotkeys(app: &AppHandle) {
             ),
         }
     }
-
-    // Register a standalone Escape handler to easily dismiss the overlay.
-    // It is immediately unregistered so it doesn't swallow Esc system-wide.
-    // It is dynamically registered only when the overlay is shown.
-    let esc = Shortcut::new(None, Code::Escape);
-    let handle = app.clone();
-    let _ = app.global_shortcut().on_shortcut(esc, move |_app, _shortcut, event| {
-        if event.state() == ShortcutState::Pressed {
-            panic_hide(&handle);
-        }
-    });
-    let _ = app.global_shortcut().unregister(esc);
 }
 
 #[cfg(test)]

@@ -5,8 +5,6 @@ use serde_json::json;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
 
-const MAX_AGENT_ITERATIONS: usize = 5;
-
 pub async fn run_worker_task(app: AppHandle, task_id: String, task_prompt: String) {
     let app_clone = app.clone();
     let task_id_clone = task_id.clone();
@@ -114,7 +112,10 @@ fn run_worker_sync(app: AppHandle, task_id: String, task_prompt: String) -> Resu
     let target_url = if task_prompt.starts_with("http") {
         task_prompt.clone()
     } else {
-        format!("https://duckduckgo.com/?q={}", urlencoding::encode(&task_prompt))
+        format!(
+            "https://duckduckgo.com/?q={}",
+            urlencoding::encode(&task_prompt)
+        )
     };
     emit_log(&format!(
         "Analyzing task: '{}' -> Decided to start at {}",
@@ -160,11 +161,14 @@ fn run_worker_sync(app: AppHandle, task_id: String, task_prompt: String) -> Resu
 
     // Emit dynamic coordinates for Coach mode based on page analysis (simulated for now)
     // We would normally use tab.find_element() to get a bounding box.
-    let _ = app.emit("target-pos-changed", json!({
-        "x": 450,
-        "y": 300
-    }));
-    
+    let _ = app.emit(
+        "target-pos-changed",
+        json!({
+            "x": 450,
+            "y": 300
+        }),
+    );
+
     emit_log("Emitted target coordinates (450, 300) to Coach Mode overlay.");
 
     emit_log("Background task completed successfully.");
