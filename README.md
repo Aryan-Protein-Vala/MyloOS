@@ -5,7 +5,7 @@
 </div>
 
 <p align="center">
-  <a href="https://mylo-frontend.vercel.app">Website</a> •
+  <a href="https://heymylo.live">Website</a> •
   <a href="#features">Features</a> •
   <a href="#architecture">Architecture</a> •
   <a href="#pricing--tiers">Pricing</a>
