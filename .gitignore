@@ -37,3 +37,9 @@ tauri.key.pub
 .idea/
 .vscode/*
 !.vscode/extensions.json
+
+.DS_Store
+CLAUDE.md
+AGENTS.md
+GEMINI.md
+.cursor/

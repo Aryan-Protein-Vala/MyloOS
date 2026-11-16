@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="https://raw.githubusercontent.com/Aryan-Protein-Vala/MyloOS/main/mylo%20frontend/public/icon.svg" alt="MYLO OS Logo" width="120" height="120" />
+  <img src="mylo-app/src-tauri/icons/icon.png" alt="MYLO OS Logo" width="120" height="120" />
   <h1>MYLO : Motion. Your Live Operator.</h1>
   <p><strong>The closest thing to Iron Man's Jarvis. An AI that actually runs your... well, everything.</strong></p>
 </div>
