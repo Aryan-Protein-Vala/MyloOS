@@ -145,25 +145,3 @@ jobs:
       - name: Tests
         working-directory: mylo-app/src-tauri
         run: cargo test --all
-
-  # ---------------------------------------------------------------------------
-  # The marketing site, deployed straight from this repo.
-  # ---------------------------------------------------------------------------
-  site:
-    name: Marketing site
-    runs-on: ubuntu-latest
-    if: hashFiles('mylo frontend/package.json') != ''
-    defaults:
-      run:
-        working-directory: mylo frontend
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - run: pnpm install --no-frozen-lockfile
-      - run: pnpm exec tsc --noEmit
-      - run: pnpm run build
