@@ -1,7 +1,8 @@
 #[cfg(target_os = "windows")]
 pub fn snap_to_element(x: i32, y: i32) -> Option<(i32, i32)> {
-    use windows::core::ComInterface;
-    use windows::Win32::System::Com::{CoInitializeEx, COINIT_MULTITHREADED};
+    use windows::Win32::System::Com::{
+        CoCreateInstance, CoInitializeEx, CLSCTX_ALL, COINIT_MULTITHREADED,
+    };
     use windows::Win32::UI::Accessibility::{CUIAutomation, IUIAutomation};
 
     // Attempt to initialize COM. It might already be initialized by Tauri on this thread,
@@ -9,14 +10,13 @@ pub fn snap_to_element(x: i32, y: i32) -> Option<(i32, i32)> {
     let _ = unsafe { CoInitializeEx(None, COINIT_MULTITHREADED) };
 
     unsafe {
-        let automation: IUIAutomation =
-            match windows::core::factory::<CUIAutomation, IUIAutomation>() {
-                Ok(a) => a,
-                Err(e) => {
-                    log::error!("Failed to create IUIAutomation instance: {:?}", e);
-                    return None;
-                }
-            };
+        let automation: IUIAutomation = match CoCreateInstance(&CUIAutomation, None, CLSCTX_ALL) {
+            Ok(a) => a,
+            Err(e) => {
+                log::error!("Failed to create IUIAutomation instance: {:?}", e);
+                return None;
+            }
+        };
 
         let pt = windows::Win32::Foundation::POINT { x, y };
         let element = match automation.ElementFromPoint(pt) {
